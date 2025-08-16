@@ -143,7 +143,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
         }]);
       }
     }
-  }, [isOpen, initialData, fetchClientsProductsAndSettings, companySettings]); // Add companySettings to dependencies
+  }, [isOpen, initialData, fetchClientsProductsAndSettings, companySettings]);
 
 
   // Effect to set initial invoice number for new invoices
@@ -218,8 +218,10 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
               ...item,
               product_id: value,
               title: selectedProduct?.name || '',
+              qty: 1, // Reset quantity to 1 when product changes
               unit_price: selectedProduct?.default_price || 0,
               tax_rate: companySettings?.default_tax_rate || 0, // Set default tax rate when product is selected
+              discount: 0, // Reset discount to 0 when product changes
             };
           }
           if (field === 'qty' || field === 'tax_rate') {

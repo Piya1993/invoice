@@ -14,7 +14,7 @@ import { DollarSign, FileText, TrendingUp, Wallet, Clock, PlusCircle, Users, Pac
 import { Tables } from '@/types/supabase';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
-import useCompanySettings from '@/hooks/useCompanySettings'; // Import the new hook
+import useCompanySettings from '@/hooks/useCompanySettings';
 
 // Extend Invoice type to include related client for display
 type InvoiceWithClient = Tables<'invoices'> & {
@@ -23,7 +23,7 @@ type InvoiceWithClient = Tables<'invoices'> & {
 
 const Dashboard: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
-  const { company, settings, loading: companySettingsLoading, error: companySettingsError, refetch: refetchCompanySettings } = useCompanySettings(); // Use the new hook
+  const { company, settings, loading: companySettingsLoading, error: companySettingsError, refetch: refetchCompanySettings } = useCompanySettings();
   const navigate = useNavigate();
   const [loadingDashboard, setLoadingDashboard] = useState(true);
   const [dashboardData, setDashboardData] = useState({
@@ -47,45 +47,45 @@ const Dashboard: React.FC = () => {
       const companyId = company.id;
       const companyCurrency = company.currency || 'PKR';
 
-      const { data: invoicesData, error: invoicesError } = await supabase
+      // Fetch aggregated invoice data
+      const { data: aggregatedData, error: aggregatedError } = await supabase
         .from('invoices')
-        .select('*, clients(*)') // Fetch client details along with invoices
-        .eq('company_id', companyId);
+        .select('count, sum(total), sum(amount_paid), sum(amount_due)')
+        .eq('company_id', companyId)
+        .single();
 
-      if (invoicesError) throw invoicesError;
+      if (aggregatedError) throw aggregatedError;
 
-      let totalInvoices = invoicesData.length;
-      let totalRevenue = new Decimal(0);
-      let totalOutstanding = new Decimal(0);
-      let totalPaidAmount = new Decimal(0);
+      // Fetch recent invoices
+      const { data: recentInvoicesData, error: recentError } = await supabase
+        .from('invoices')
+        .select('*, clients(*)')
+        .eq('company_id', companyId)
+        .order('issue_date', { ascending: false })
+        .limit(5);
 
-      const recentInvoices: InvoiceWithClient[] = [];
-      const overdueInvoices: InvoiceWithClient[] = [];
-      const today = new Date();
+      if (recentError) throw recentError;
 
-      invoicesData.forEach(invoice => {
-        totalRevenue = totalRevenue.plus(fromSmallestUnit(invoice.total));
-        totalOutstanding = totalOutstanding.plus(fromSmallestUnit(invoice.amount_due));
-        totalPaidAmount = totalPaidAmount.plus(fromSmallestUnit(invoice.amount_paid));
+      // Fetch overdue invoices
+      const { data: overdueInvoicesData, error: overdueError } = await supabase
+        .from('invoices')
+        .select('*, clients(*)')
+        .eq('company_id', companyId)
+        .neq('status', 'paid') // Not paid
+        .lt('due_date', new Date().toISOString().split('T')[0]) // Due date is in the past
+        .order('due_date', { ascending: true })
+        .limit(5);
 
-        // Check for overdue invoices
-        if (invoice.status !== 'paid' && new Date(invoice.due_date) < today) {
-          overdueInvoices.push(invoice);
-        }
-      });
-
-      // Sort all invoices by issue_date descending to get recent ones
-      const sortedInvoices = invoicesData.sort((a, b) => new Date(b.issue_date).getTime() - new Date(a.issue_date).getTime());
-      recentInvoices.push(...sortedInvoices.slice(0, 5)); // Get top 5 recent invoices
+      if (overdueError) throw overdueError;
 
       setDashboardData({
-        totalInvoices,
-        totalRevenue,
-        totalOutstanding,
-        totalPaidAmount,
+        totalInvoices: aggregatedData?.count || 0,
+        totalRevenue: new Decimal(fromSmallestUnit(aggregatedData?.sum?.total || 0)),
+        totalOutstanding: new Decimal(fromSmallestUnit(aggregatedData?.sum?.amount_due || 0)),
+        totalPaidAmount: new Decimal(fromSmallestUnit(aggregatedData?.sum?.amount_paid || 0)),
         currency: companyCurrency,
-        recentInvoices,
-        overdueInvoices,
+        recentInvoices: recentInvoicesData || [],
+        overdueInvoices: overdueInvoicesData || [],
       });
 
     } catch (error: any) {
@@ -141,7 +141,7 @@ const Dashboard: React.FC = () => {
   return (
     <div className="flex flex-col min-h-screen bg-background p-4">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-4xl font-bold">Welcome, {user.email}!</h1>
+        <h1 className="text-4xl font-bold">Welcome, {company?.name || user.email}!</h1>
         <Button onClick={handleSignOut}>Sign Out</Button>
       </div>
 

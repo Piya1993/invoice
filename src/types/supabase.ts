@@ -19,6 +19,7 @@ export interface Database {
           logo_url: string | null
           address: string | null
           phone: string | null
+          email: string | null // Added email field
           tax_id: string | null
           currency: string
           created_by: string
@@ -30,6 +31,7 @@ export interface Database {
           logo_url?: string | null
           address?: string | null
           phone?: string | null
+          email?: string | null // Added email field
           tax_id?: string | null
           currency?: string
           created_by: string
@@ -41,6 +43,7 @@ export interface Database {
           logo_url?: string | null
           address?: string | null
           phone?: string | null
+          email?: string | null // Added email field
           tax_id?: string | null
           currency?: string
           created_by?: string

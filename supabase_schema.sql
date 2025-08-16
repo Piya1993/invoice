@@ -1,155 +1,169 @@
--- Enable UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- This is your Supabase schema.
+-- It is used to define your database tables, functions, and enums.
+-- You can generate this file using `supabase gen types typescript --project-id <YOUR_PROJECT_ID> --schema public > src/types/supabase.ts`
 
--- Create companies table
-CREATE TABLE public.companies (
-    id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+-- Enums
+CREATE TYPE invoice_status AS ENUM ('draft', 'sent', 'paid', 'overdue', 'void');
+
+-- Tables
+CREATE TABLE companies (
+    id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
     name text NOT NULL,
     logo_url text,
     address text,
     phone text,
+    email text, -- New email column
     tax_id text,
-    currency text DEFAULT 'PKR' NOT NULL,
-    created_by uuid REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    currency text NOT NULL DEFAULT 'PKR',
+    created_by uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Create clients table
-CREATE TABLE public.clients (
-    id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
-    company_id uuid REFERENCES public.companies(id) ON DELETE CASCADE NOT NULL,
+CREATE TABLE settings (
+    company_id uuid PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,
+    logo_url text, -- Redundant, will be removed from here later
+    default_tax_rate numeric NOT NULL DEFAULT 0,
+    default_currency text NOT NULL DEFAULT 'PKR', -- Redundant, will be removed from here later
+    numbering_prefix text NOT NULL DEFAULT 'INV-',
+    next_number integer NOT NULL DEFAULT 1,
+    locale text NOT NULL DEFAULT 'en-PK',
+    timezone text NOT NULL DEFAULT 'Asia/Karachi',
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE clients (
+    id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    company_id uuid NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     name text NOT NULL,
     email text,
     phone text,
     address text,
     notes text,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Create products table
-CREATE TABLE public.products (
-    id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
-    company_id uuid REFERENCES public.companies(id) ON DELETE CASCADE NOT NULL,
+CREATE TABLE products (
+    id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    company_id uuid NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     name text NOT NULL,
     description text,
     unit text,
-    default_price bigint NOT NULL, -- Stored in smallest unit (e.g., paisas)
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    default_price numeric NOT NULL, -- Stored in smallest unit (e.g., paisas)
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Create invoices table
-CREATE TYPE invoice_status AS ENUM ('draft', 'sent', 'paid', 'overdue', 'void');
-CREATE TABLE public.invoices (
-    id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
-    company_id uuid REFERENCES public.companies(id) ON DELETE CASCADE NOT NULL,
-    client_id uuid REFERENCES public.clients(id) ON DELETE CASCADE NOT NULL,
-    number text, -- Will be generated later
+CREATE TABLE invoices (
+    id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    company_id uuid NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    client_id uuid NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+    number text,
     issue_date date NOT NULL,
     due_date date NOT NULL,
-    status invoice_status DEFAULT 'draft' NOT NULL,
+    status invoice_status NOT NULL DEFAULT 'draft',
     currency text NOT NULL,
     notes text,
     terms text,
-    subtotal bigint NOT NULL, -- Stored in smallest unit
-    tax_total bigint NOT NULL, -- Stored in smallest unit
-    discount_total bigint NOT NULL, -- Stored in smallest unit
-    total bigint NOT NULL, -- Stored in smallest unit
-    amount_paid bigint DEFAULT 0 NOT NULL, -- Stored in smallest unit
-    amount_due bigint NOT NULL, -- Stored in smallest unit
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    subtotal numeric NOT NULL, -- Stored in smallest unit
+    tax_total numeric NOT NULL, -- Stored in smallest unit
+    discount_total numeric NOT NULL, -- Stored in smallest unit
+    total numeric NOT NULL, -- Stored in smallest unit
+    amount_paid numeric NOT NULL DEFAULT 0, -- Stored in smallest unit
+    amount_due numeric NOT NULL, -- Stored in smallest unit
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Create invoice_items table
-CREATE TABLE public.invoice_items (
-    id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
-    invoice_id uuid REFERENCES public.invoices(id) ON DELETE CASCADE NOT NULL,
-    product_id uuid REFERENCES public.products(id) ON DELETE SET NULL, -- Optional link to product
+CREATE TABLE invoice_items (
+    id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    invoice_id uuid NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+    product_id uuid REFERENCES products(id) ON DELETE SET NULL,
     title text NOT NULL,
-    qty numeric(10, 2) NOT NULL,
-    unit_price bigint NOT NULL, -- Stored in smallest unit
-    tax_rate numeric(5, 2) DEFAULT 0 NOT NULL, -- Percentage, e.g., 0.05 for 5%
-    discount bigint DEFAULT 0 NOT NULL, -- Stored in smallest unit
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    qty numeric NOT NULL,
+    unit_price numeric NOT NULL, -- Stored in smallest unit
+    tax_rate numeric NOT NULL DEFAULT 0, -- Percentage
+    discount numeric NOT NULL DEFAULT 0, -- Stored in smallest unit
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Create payments table
-CREATE TABLE public.payments (
-    id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
-    invoice_id uuid REFERENCES public.invoices(id) ON DELETE CASCADE NOT NULL,
+CREATE TABLE payments (
+    id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    invoice_id uuid NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
     date date NOT NULL,
     method text NOT NULL,
-    amount bigint NOT NULL, -- Stored in smallest unit
+    amount numeric NOT NULL, -- Stored in smallest unit
     notes text,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Create settings table
-CREATE TABLE public.settings (
-    company_id uuid REFERENCES public.companies(id) ON DELETE CASCADE PRIMARY KEY,
-    logo_url text,
-    default_tax_rate numeric(5, 2) DEFAULT 0 NOT NULL,
-    default_currency text DEFAULT 'PKR' NOT NULL,
-    numbering_prefix text DEFAULT 'INV' NOT NULL,
-    next_number integer DEFAULT 1 NOT NULL,
-    locale text DEFAULT 'en-PK' NOT NULL,
-    timezone text DEFAULT 'Asia/Karachi' NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
-);
-
--- Set up Row Level Security (RLS)
-ALTER TABLE public.companies ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.invoice_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
+-- Row Level Security (RLS)
+ALTER TABLE companies ENABLE ROW LEVEL SECURITY;
+ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
+ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE invoice_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 
 -- Policies for companies table
-CREATE POLICY "Users can create companies." ON public.companies FOR INSERT WITH CHECK (auth.uid() = created_by);
-CREATE POLICY "Users can view their own companies." ON public.companies FOR SELECT USING (auth.uid() = created_by);
-CREATE POLICY "Users can update their own companies." ON public.companies FOR UPDATE USING (auth.uid() = created_by);
-CREATE POLICY "Users can delete their own companies." ON public.companies FOR DELETE USING (auth.uid() = created_by);
+CREATE POLICY "Enable read access for authenticated users" ON companies FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Enable insert for authenticated users" ON companies FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Enable update for users who created the company" ON companies FOR UPDATE USING (auth.uid() = created_by);
+CREATE POLICY "Enable delete for users who created the company" ON companies FOR DELETE USING (auth.uid() = created_by);
 
--- Helper function to get the company_id for the current user (owner)
+-- Policies for settings table
+CREATE POLICY "Enable read access for authenticated users based on company_id" ON settings FOR SELECT USING (EXISTS (SELECT 1 FROM companies WHERE companies.id = settings.company_id AND companies.created_by = auth.uid()));
+CREATE POLICY "Enable insert for authenticated users based on company_id" ON settings FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM companies WHERE companies.id = settings.company_id AND companies.created_by = auth.uid()));
+CREATE POLICY "Enable update for users who own the company" ON settings FOR UPDATE USING (EXISTS (SELECT 1 FROM companies WHERE companies.id = settings.company_id AND companies.created_by = auth.uid()));
+
+-- Policies for clients table
+CREATE POLICY "Enable read access for authenticated users based on company_id" ON clients FOR SELECT USING (EXISTS (SELECT 1 FROM companies WHERE companies.id = clients.company_id AND companies.created_by = auth.uid()));
+CREATE POLICY "Enable insert for authenticated users based on company_id" ON clients FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM companies WHERE companies.id = clients.company_id AND companies.created_by = auth.uid()));
+CREATE POLICY "Enable update for users who own the company" ON clients FOR UPDATE USING (EXISTS (SELECT 1 FROM companies WHERE companies.id = clients.company_id AND companies.created_by = auth.uid()));
+CREATE POLICY "Enable delete for users who own the company" ON clients FOR DELETE USING (EXISTS (SELECT 1 FROM companies WHERE companies.id = clients.company_id AND companies.created_by = auth.uid()));
+
+-- Policies for products table
+CREATE POLICY "Enable read access for authenticated users based on company_id" ON products FOR SELECT USING (EXISTS (SELECT 1 FROM companies WHERE companies.id = products.company_id AND companies.created_by = auth.uid()));
+CREATE POLICY "Enable insert for authenticated users based on company_id" ON products FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM companies WHERE companies.id = products.company_id AND companies.created_by = auth.uid()));
+CREATE POLICY "Enable update for users who own the company" ON products FOR UPDATE USING (EXISTS (SELECT 1 FROM companies WHERE companies.id = products.company_id AND companies.created_by = auth.uid()));
+CREATE POLICY "Enable delete for users who own the company" ON products FOR DELETE USING (EXISTS (SELECT 1 FROM companies WHERE companies.id = products.company_id AND companies.created_by = auth.uid()));
+
+-- Policies for invoices table
+CREATE POLICY "Enable read access for authenticated users based on company_id" ON invoices FOR SELECT USING (EXISTS (SELECT 1 FROM companies WHERE companies.id = invoices.company_id AND companies.created_by = auth.uid()));
+CREATE POLICY "Enable insert for authenticated users based on company_id" ON invoices FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM companies WHERE companies.id = invoices.company_id AND companies.created_by = auth.uid()));
+CREATE POLICY "Enable update for users who own the company" ON invoices FOR UPDATE USING (EXISTS (SELECT 1 FROM companies WHERE companies.id = invoices.company_id AND companies.created_by = auth.uid()));
+CREATE POLICY "Enable delete for users who own the company" ON invoices FOR DELETE USING (EXISTS (SELECT 1 FROM companies WHERE companies.id = invoices.company_id AND companies.created_by = auth.uid()));
+
+-- Policies for invoice_items table
+CREATE POLICY "Enable read access for authenticated users based on invoice_id" ON invoice_items FOR SELECT USING (EXISTS (SELECT 1 FROM invoices WHERE invoices.id = invoice_items.invoice_id AND invoices.company_id IN (SELECT id FROM companies WHERE created_by = auth.uid())));
+CREATE POLICY "Enable insert for authenticated users based on invoice_id" ON invoice_items FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM invoices WHERE invoices.id = invoice_items.invoice_id AND invoices.company_id IN (SELECT id FROM companies WHERE created_by = auth.uid())));
+CREATE POLICY "Enable update for users who own the invoice" ON invoice_items FOR UPDATE USING (EXISTS (SELECT 1 FROM invoices WHERE invoices.id = invoice_items.invoice_id AND invoices.company_id IN (SELECT id FROM companies WHERE created_by = auth.uid())));
+CREATE POLICY "Enable delete for users who own the invoice" ON invoice_items FOR DELETE USING (EXISTS (SELECT 1 FROM invoices WHERE invoices.id = invoice_items.invoice_id AND invoices.company_id IN (SELECT id FROM companies WHERE created_by = auth.uid())));
+
+-- Policies for payments table
+CREATE POLICY "Enable read access for authenticated users based on invoice_id" ON payments FOR SELECT USING (EXISTS (SELECT 1 FROM invoices WHERE invoices.id = payments.invoice_id AND invoices.company_id IN (SELECT id FROM companies WHERE created_by = auth.uid())));
+CREATE POLICY "Enable insert for authenticated users based on invoice_id" ON payments FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM invoices WHERE invoices.id = payments.invoice_id AND invoices.company_id IN (SELECT id FROM companies WHERE created_by = auth.uid())));
+CREATE POLICY "Enable update for users who own the invoice" ON payments FOR UPDATE USING (EXISTS (SELECT 1 FROM invoices WHERE invoices.id = payments.invoice_id AND invoices.company_id IN (SELECT id FROM companies WHERE created_by = auth.uid())));
+CREATE POLICY "Enable delete for users who own the invoice" ON payments FOR DELETE USING (EXISTS (SELECT 1 FROM invoices WHERE invoices.id = payments.invoice_id AND invoices.company_id IN (SELECT id FROM companies WHERE created_by = auth.uid())));
+
+-- Functions
 CREATE OR REPLACE FUNCTION get_user_company_id()
-RETURNS uuid AS $$
-  SELECT id FROM public.companies WHERE created_by = auth.uid() LIMIT 1;
-$$ LANGUAGE sql SECURITY DEFINER;
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    user_company_id uuid;
+BEGIN
+    SELECT id INTO user_company_id FROM public.companies WHERE created_by = auth.uid();
+    RETURN user_company_id;
+END;
+$$;
 
--- Policies for clients
-CREATE POLICY "Users can create clients for their company." ON public.clients FOR INSERT WITH CHECK (company_id = get_user_company_id());
-CREATE POLICY "Users can view clients for their company." ON public.clients FOR SELECT USING (company_id = get_user_company_id());
-CREATE POLICY "Users can update clients for their company." ON public.clients FOR UPDATE USING (company_id = get_user_company_id());
-CREATE POLICY "Users can delete clients for their company." ON public.clients FOR DELETE USING (company_id = get_user_company_id());
+-- Set up Realtime
+BEGIN;
+  -- Remove the realtime publication for all tables
+  DROP PUBLICATION IF EXISTS supabase_realtime;
 
--- Policies for products
-CREATE POLICY "Users can create products for their company." ON public.products FOR INSERT WITH CHECK (company_id = get_user_company_id());
-CREATE POLICY "Users can view products for their company." ON public.products FOR SELECT USING (company_id = get_user_company_id());
-CREATE POLICY "Users can update products for their company." ON public.products FOR UPDATE USING (company_id = get_user_company_id());
-CREATE POLICY "Users can delete products for their company." ON public.products FOR DELETE USING (company_id = get_user_company_id());
-
--- Policies for invoices
-CREATE POLICY "Users can create invoices for their company." ON public.invoices FOR INSERT WITH CHECK (company_id = get_user_company_id());
-CREATE POLICY "Users can view invoices for their company." ON public.invoices FOR SELECT USING (company_id = get_user_company_id());
-CREATE POLICY "Users can update invoices for their company." ON public.invoices FOR UPDATE USING (company_id = get_user_company_id());
-CREATE POLICY "Users can delete invoices for their company." ON public.invoices FOR DELETE USING (company_id = get_user_company_id());
-
--- Policies for invoice_items
-CREATE POLICY "Users can create invoice items for their company's invoices." ON public.invoice_items FOR INSERT WITH CHECK ((SELECT company_id FROM public.invoices WHERE id = invoice_id) = get_user_company_id());
-CREATE POLICY "Users can view invoice items for their company's invoices." ON public.invoice_items FOR SELECT USING ((SELECT company_id FROM public.invoices WHERE id = invoice_id) = get_user_company_id());
-CREATE POLICY "Users can update invoice items for their company's invoices." ON public.invoice_items FOR UPDATE USING ((SELECT company_id FROM public.invoices WHERE id = invoice_id) = get_user_company_id());
-CREATE POLICY "Users can delete invoice items for their company's invoices." ON public.invoice_items FOR DELETE USING ((SELECT company_id FROM public.invoices WHERE id = invoice_id) = get_user_company_id());
-
--- Policies for payments
-CREATE POLICY "Users can create payments for their company's invoices." ON public.payments FOR INSERT WITH CHECK ((SELECT company_id FROM public.invoices WHERE id = invoice_id) = get_user_company_id());
-CREATE POLICY "Users can view payments for their company's invoices." ON public.payments FOR SELECT USING ((SELECT company_id FROM public.invoices WHERE id = invoice_id) = get_user_company_id());
-CREATE POLICY "Users can update payments for their company's invoices." ON public.payments FOR UPDATE USING ((SELECT company_id FROM public.invoices WHERE id = invoice_id) = get_user_company_id());
-CREATE POLICY "Users can delete payments for their company's invoices." ON public.payments FOR DELETE USING ((SELECT company_id FROM public.invoices WHERE id = invoice_id) = get_user_company_id());
-
--- Policies for settings
-CREATE POLICY "Users can create settings for their company." ON public.settings FOR INSERT WITH CHECK (company_id = get_user_company_id());
-CREATE POLICY "Users can view settings for their company." ON public.settings FOR SELECT USING (company_id = get_user_company_id());
-CREATE POLICY "Users can update settings for their company." ON public.settings FOR UPDATE USING (company_id = get_user_company_id());
-CREATE POLICY "Users can delete settings for their company." ON public.settings FOR DELETE USING (company_id = get_user_company_id());
+  -- Create a new publication for all tables in the public schema
+  CREATE PUBLICATION supabase_realtime FOR TABLE public.companies, public.settings, public.clients, public.products, public.invoices, public.invoice_items, public.payments;
+COMMIT;

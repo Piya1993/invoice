@@ -39,7 +39,7 @@ const InvoiceDisplay = forwardRef<HTMLDivElement, InvoiceDisplayProps>(
             <h2 className="text-xl font-semibold">{company.name}</h2>
             <p className="text-sm">{company.address || ''}</p>
             <p className="text-sm">{company.phone || ''}</p>
-            {/* Removed user email as company email placeholder */}
+            <p className="text-sm">{company.email || ''}</p> {/* Display company email */}
           </div>
         </div>
 

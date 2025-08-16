@@ -280,7 +280,7 @@ const InvoiceDetailsPage: React.FC = () => {
         </CardContent>
       </Card>
 
-      <Card className="mb-6">
+      <Card>
         <CardHeader>
           <CardTitle>Invoice Items</CardTitle>
         </CardHeader>

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useRouter } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -12,10 +12,10 @@ import { toast } from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
 import { formatCurrency, fromSmallestUnit } from '@/lib/utils';
 import { format } from 'date-fns';
-import { ArrowLeft, Edit, Printer, DollarSign } from 'lucide-react';
+import { ArrowLeft, Edit, Printer, DollarSign, CheckCircle } from 'lucide-react'; // Import CheckCircle icon
 import PaymentForm from '@/components/PaymentForm';
 import InvoiceForm from '@/components/InvoiceForm';
-import InvoicePdfGenerator from '@/components/InvoicePdfGenerator'; // Import the new component
+import InvoicePdfGenerator from '@/components/InvoicePdfGenerator';
 
 // Extend Invoice type to include related client and invoice_items
 type InvoiceWithDetails = Tables<'invoices'> & {
@@ -26,7 +26,7 @@ type InvoiceWithDetails = Tables<'invoices'> & {
 
 const InvoiceDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
+  const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const [invoice, setInvoice] = useState<InvoiceWithDetails | null>(null);
   const [company, setCompany] = useState<Tables<'companies'> | null>(null);
@@ -62,7 +62,7 @@ const InvoiceDetailsPage: React.FC = () => {
       if (settingsError && settingsError.code !== 'PGRST116') { // PGRST116 means no rows found
         throw settingsError;
       }
-      setSettings(settingsData); // Will be null if no settings found
+      setSettings(settingsData);
 
       // Fetch invoice details
       const { data, error } = await supabase
@@ -75,18 +75,18 @@ const InvoiceDetailsPage: React.FC = () => {
       if (error) throw error;
       if (!data) {
         toast.error('Invoice not found or you do not have permission to view it.');
-        router.push('/invoices');
+        navigate('/invoices');
         return;
       }
       setInvoice(data);
     } catch (error: any) {
       console.error('Error fetching invoice details:', error);
       toast.error(error.message || 'Failed to fetch invoice details.');
-      router.push('/invoices');
+      navigate('/invoices');
     } finally {
       setLoading(false);
     }
-  }, [user, id, router]);
+  }, [user, id, navigate]);
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -112,6 +112,37 @@ const InvoiceDetailsPage: React.FC = () => {
     setIsEditFormOpen(false);
   };
 
+  const handleMarkAsPaid = async () => {
+    if (!invoice) return;
+
+    if (!window.confirm('Are you sure you want to mark this invoice as PAID? This will set the amount due to zero.')) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('invoices')
+        .update({
+          status: 'paid',
+          amount_paid: invoice.total, // Set amount paid to total
+          amount_due: 0, // Set amount due to zero
+        })
+        .eq('id', invoice.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      toast.success('Invoice marked as paid successfully!');
+      fetchInvoiceDetails(); // Re-fetch to update UI
+    } catch (error: any) {
+      console.error('Error marking invoice as paid:', error);
+      toast.error(error.message || 'Failed to mark invoice as paid.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (authLoading || loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
@@ -124,21 +155,25 @@ const InvoiceDetailsPage: React.FC = () => {
     return null; // Redirect handled in fetchInvoiceDetails
   }
 
+  const isPaid = invoice.amount_due <= 0 || invoice.status === 'paid';
+
   return (
     <div className="container mx-auto p-4">
       <div className="flex justify-between items-center mb-6">
-        <Button variant="outline" onClick={() => router.push('/invoices')}>
+        <Button variant="outline" onClick={() => navigate('/invoices')}>
           <ArrowLeft className="mr-2 h-4 w-4" /> Back to Invoices
         </Button>
         <h1 className="text-3xl font-bold">Invoice #{invoice.number || invoice.id.substring(0, 8)}</h1>
         <div className="space-x-2">
-          {/* Use InvoicePdfGenerator component here */}
           {company && settings && <InvoicePdfGenerator invoice={invoice} company={company} settings={settings} />}
           <Button onClick={handleEditInvoice}>
             <Edit className="mr-2 h-4 w-4" /> Edit Invoice
           </Button>
-          <Button variant="secondary" onClick={handleRecordPayment} disabled={invoice.amount_due <= 0}>
+          <Button variant="secondary" onClick={handleRecordPayment} disabled={isPaid}>
             <DollarSign className="mr-2 h-4 w-4" /> Record Payment
+          </Button>
+          <Button variant="success" onClick={handleMarkAsPaid} disabled={isPaid}>
+            <CheckCircle className="mr-2 h-4 w-4" /> Mark as Paid
           </Button>
         </div>
       </div>

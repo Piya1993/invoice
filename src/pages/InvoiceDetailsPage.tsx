@@ -12,13 +12,24 @@ import { toast } from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
 import { formatCurrency, fromSmallestUnit } from '@/lib/utils';
 import { format } from 'date-fns';
-import { ArrowLeft, Edit, Printer, DollarSign, CheckCircle } from 'lucide-react'; // Import CheckCircle icon
+import { ArrowLeft, Edit, Printer, DollarSign, CheckCircle, Trash2 } from 'lucide-react'; // Import Trash2 icon
 import PaymentForm from '@/components/PaymentForm';
 import InvoiceForm from '@/components/InvoiceForm';
 import InvoicePdfGenerator from '@/components/InvoicePdfGenerator';
 import InvoiceDisplay from '@/components/InvoiceDisplay'; // Import the new component
 import Decimal from 'decimal.js'; // Import Decimal
 import useCompany from '@/hooks/useCompany'; // Import the new hook
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"; // Import AlertDialog components
 
 // Extend Invoice type to include related client and invoice_items
 type InvoiceWithDetails = Tables<'invoices'> & {
@@ -35,6 +46,8 @@ const InvoiceDetailsPage: React.FC = () => {
   const [invoice, setInvoice] = useState<InvoiceWithDetails | null>(null);
   const [settings, setSettings] = useState<Tables<'settings'> | null>(null);
   const [loadingInvoiceDetails, setLoadingInvoiceDetails] = useState(true); // Renamed to avoid conflict
+  const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
+  const [isEditFormOpen, setIsEditFormOpen] = useState(false);
 
   const invoiceDisplayRef = useRef<HTMLDivElement>(null); // Ref for the InvoiceDisplay component
 
@@ -143,6 +156,42 @@ const InvoiceDetailsPage: React.FC = () => {
     }
   };
 
+  const handleDeleteInvoice = async () => {
+    if (!invoice) return;
+
+    setLoadingInvoiceDetails(true);
+    try {
+      // Delete associated payments first
+      const { error: paymentsError } = await supabase
+        .from('payments')
+        .delete()
+        .eq('invoice_id', invoice.id);
+      if (paymentsError) throw paymentsError;
+
+      // Delete associated invoice items
+      const { error: itemsError } = await supabase
+        .from('invoice_items')
+        .delete()
+        .eq('invoice_id', invoice.id);
+      if (itemsError) throw itemsError;
+
+      // Finally, delete the invoice
+      const { error: invoiceError } = await supabase
+        .from('invoices')
+        .delete()
+        .eq('id', invoice.id);
+
+      if (invoiceError) throw invoiceError;
+      toast.success('Invoice and all associated data deleted successfully!');
+      navigate('/invoices'); // Redirect to invoices list after deletion
+    } catch (error: any) {
+      console.error('Error deleting invoice:', error);
+      toast.error(error.message || 'Failed to delete invoice.');
+    } finally {
+      setLoadingInvoiceDetails(false);
+    }
+  };
+
   if (authLoading || companyLoading || loadingInvoiceDetails) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
@@ -191,6 +240,25 @@ const InvoiceDetailsPage: React.FC = () => {
           <Button variant="success" onClick={handleMarkAsPaid} disabled={isPaid}>
             <CheckCircle className="mr-2 h-4 w-4" /> Mark as Paid
           </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" disabled={loadingInvoiceDetails}>
+                <Trash2 className="mr-2 h-4 w-4" /> Delete Invoice
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action cannot be undone. This will permanently delete this invoice and all associated payments and items from your account.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteInvoice}>Continue</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
 
@@ -352,14 +420,13 @@ const InvoiceDetailsPage: React.FC = () => {
             invoiceId={invoice.id}
             invoiceCurrency={invoice.currency}
             invoiceAmountDue={invoice.amount_due}
-            companyId={company.id} // Pass company.id here
           />
           <InvoiceForm
             isOpen={isEditFormOpen}
             onClose={() => setIsEditFormOpen(false)}
             onSave={handleSaveInvoice}
             initialData={invoice}
-            companyId={company.id} // Pass company.id here
+            companyId={company.id}
           />
         </>
       )}

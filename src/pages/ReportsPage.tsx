@@ -39,6 +39,7 @@ const ReportsPage: React.FC = () => {
     bestSellingProductRevenue: new Decimal(0),
     totalProductRevenue: new Decimal(0),
   });
+  const [displayCurrency, setDisplayCurrency] = useState('PKR'); // State to hold the actual currency
 
   const fetchReportData = useCallback(async () => {
     if (!user?.id) return;
@@ -55,7 +56,7 @@ const ReportsPage: React.FC = () => {
         throw new Error('Could not find company for the current user. Please ensure your company is set up.');
       }
       const companyId = companyData.id;
-      const companyCurrency = companyData.currency || 'PKR';
+      setDisplayCurrency(companyData.currency || 'PKR'); // Set the display currency
 
       // Fetch all invoices with items and clients
       const { data: invoicesData, error: invoicesError } = await supabase
@@ -196,9 +197,6 @@ const ReportsPage: React.FC = () => {
       </div>
     );
   }
-
-  // Determine currency for display (using the company's default currency)
-  const displayCurrency = user?.user_metadata?.company_currency || 'PKR';
 
   return (
     <div className="container mx-auto p-4">

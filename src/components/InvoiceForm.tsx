@@ -134,14 +134,15 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
           title: '',
           qty: 1,
           unit_price: 0,
-          tax_rate: 0,
+          tax_rate: companySettings?.default_tax_rate || 0, // Set default tax rate for new item
           discount: 0,
           invoice_id: '', // Will be set on save
           product_id: null,
         }]);
       }
     }
-  }, [isOpen, initialData, fetchClientsProductsAndSettings]);
+  }, [isOpen, initialData, fetchClientsProductsAndSettings, companySettings]); // Add companySettings to dependencies
+
 
   // Effect to set initial invoice number for new invoices
   useEffect(() => {
@@ -192,7 +193,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
         title: '',
         qty: 1,
         unit_price: 0,
-        tax_rate: 0,
+        tax_rate: companySettings?.default_tax_rate || 0, // Set default tax rate for new item
         discount: 0,
         invoice_id: '',
         product_id: null,
@@ -214,8 +215,8 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
               ...item,
               product_id: value,
               title: selectedProduct?.name || '',
-              // You might want to set default tax rate here from company settings
               unit_price: selectedProduct?.default_price || 0,
+              tax_rate: companySettings?.default_tax_rate || 0, // Set default tax rate when product is selected
             };
           }
           if (field === 'qty' || field === 'unit_price' || field === 'tax_rate' || field === 'discount') {

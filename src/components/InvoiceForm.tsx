@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } = '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -26,9 +26,10 @@ interface InvoiceFormProps {
   onClose: () => void;
   onSave: (invoice: Tables<'invoices'> & { invoice_items: Tables<'invoice_items'>[] }) => void;
   initialData?: (Tables<'invoices'> & { invoice_items: Tables<'invoice_items'>[] }) | null;
+  companyId: string; // New prop
 }
 
-const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, initialData }) => {
+const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, initialData, companyId }) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [clients, setClients] = useState<Tables<'clients'>[]>([]);
@@ -54,18 +55,19 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
   const invoiceStatuses: Enums<'invoice_status'>[] = ['draft', 'sent', 'paid', 'overdue', 'void'];
 
   const fetchClientsProductsAndSettings = useCallback(async () => {
-    if (!user?.id) return;
+    if (!user?.id || !companyId) return; // Ensure companyId is available
 
     setLoading(true);
     try {
+      // Fetch company currency and settings
       const { data: companyData, error: companyError } = await supabase
         .from('companies')
         .select('id, currency')
-        .eq('created_by', user.id)
+        .eq('id', companyId) // Use companyId prop
         .single();
 
       if (companyError || !companyData) {
-        throw new Error('Could not find company for the current user. Please ensure your company is set up.');
+        throw new Error('Could not find company details. Please ensure your company is set up.');
       }
 
       setCurrency(companyData.currency); // Set default currency from company settings
@@ -73,7 +75,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
       const { data: settingsData, error: settingsError } = await supabase
         .from('settings')
         .select('*')
-        .eq('company_id', companyData.id)
+        .eq('company_id', companyId) // Use companyId prop
         .single();
 
       if (settingsError && settingsError.code !== 'PGRST116') { // PGRST116 means no rows found
@@ -84,7 +86,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
       const { data: clientsData, error: clientsError } = await supabase
         .from('clients')
         .select('*')
-        .eq('company_id', companyData.id)
+        .eq('company_id', companyId) // Use companyId prop
         .order('name', { ascending: true });
 
       if (clientsError) throw clientsError;
@@ -93,7 +95,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
       const { data: productsData, error: productsError } = await supabase
         .from('products')
         .select('*')
-        .eq('company_id', companyData.id)
+        .eq('company_id', companyId) // Use companyId prop
         .order('name', { ascending: true });
 
       if (productsError) throw productsError;
@@ -105,7 +107,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, companyId]); // Add companyId to dependencies
 
   useEffect(() => {
     if (isOpen) {
@@ -241,6 +243,10 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
       toast.error('User not authenticated.');
       return;
     }
+    if (!companyId) {
+      toast.error('Company ID is missing. Please ensure your company is set up.');
+      return;
+    }
     if (!clientId) {
       toast.error('Please select a client.');
       return;
@@ -275,19 +281,8 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
         total,
         amount_paid: initialData?.amount_paid || 0, // Keep existing amount paid for updates
         amount_due: total - (initialData?.amount_paid || 0), // Recalculate amount due
-        company_id: '', // Will be set by RLS policy or server function
+        company_id: companyId, // Use the prop
       };
-
-      const { data: companyData, error: companyError } = await supabase
-        .from('companies')
-        .select('id')
-        .eq('created_by', user.id)
-        .single();
-
-      if (companyError || !companyData) {
-        throw new Error('Could not find company for the current user. Please ensure your company is set up.');
-      }
-      invoiceData.company_id = companyData.id;
 
       let savedInvoice: Tables<'invoices'>;
       let savedInvoiceItems: Tables<'invoice_items'>[] = [];

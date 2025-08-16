@@ -13,6 +13,7 @@ import { useAuth } from '@/context/AuthContext';
 import { formatCurrency } from '@/lib/utils';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom'; // Import useNavigate
+import useCompany from '@/hooks/useCompany'; // Import the new hook
 
 // Extend Invoice type to include related client and invoice_items
 type InvoiceWithDetails = Tables<'invoices'> & {
@@ -22,31 +23,25 @@ type InvoiceWithDetails = Tables<'invoices'> & {
 
 const InvoicesPage: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
+  const { company, loading: companyLoading, error: companyError } = useCompany(); // Use the new hook
   const navigate = useNavigate(); // Initialize useNavigate
   const [invoices, setInvoices] = useState<InvoiceWithDetails[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingInvoices, setLoadingInvoices] = useState(true); // Renamed to avoid conflict
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<InvoiceWithDetails | null>(null);
 
   const fetchInvoices = useCallback(async () => {
-    if (!user?.id) return;
+    if (!company?.id) {
+      setLoadingInvoices(false);
+      return;
+    }
 
-    setLoading(true);
+    setLoadingInvoices(true);
     try {
-      const { data: companyData, error: companyError } = await supabase
-        .from('companies')
-        .select('id')
-        .eq('created_by', user.id)
-        .single();
-
-      if (companyError || !companyData) {
-        throw new Error('Could not find company for the current user. Please ensure your company is set up.');
-      }
-
       const { data, error } = await supabase
         .from('invoices')
         .select('*, clients(*), invoice_items(*)') // Fetch related client and items
-        .eq('company_id', companyData.id)
+        .eq('company_id', company.id)
         .order('issue_date', { ascending: false });
 
       if (error) throw error;
@@ -55,15 +50,20 @@ const InvoicesPage: React.FC = () => {
       console.error('Error fetching invoices:', error);
       toast.error(error.message || 'Failed to fetch invoices.');
     } finally {
-      setLoading(false);
+      setLoadingInvoices(false);
     }
-  }, [user]);
+  }, [company]);
 
   useEffect(() => {
-    if (!authLoading && user) {
+    if (!authLoading && !user) {
+      navigate('/auth');
+    } else if (!companyLoading && company) {
       fetchInvoices();
+    } else if (!companyLoading && companyError) {
+      toast.error(companyError);
+      setLoadingInvoices(false);
     }
-  }, [user, authLoading, fetchInvoices]);
+  }, [user, authLoading, company, companyLoading, companyError, navigate, fetchInvoices]);
 
   const handleSaveInvoice = (newInvoice: InvoiceWithDetails) => {
     if (editingInvoice) {
@@ -105,10 +105,20 @@ const InvoicesPage: React.FC = () => {
     navigate(`/invoices/${invoiceId}`);
   };
 
-  if (authLoading || loading) {
+  if (authLoading || companyLoading || loadingInvoices) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <p>Loading invoices...</p>
+      </div>
+    );
+  }
+
+  if (companyError || !company?.id) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">
+        <h2 className="text-xl font-semibold text-red-600 mb-4">Error: {companyError || 'Company not found.'}</h2>
+        <p className="text-muted-foreground mb-4">Please ensure your company is set up correctly in settings.</p>
+        <Button onClick={() => navigate('/setup-company')}>Go to Company Setup</Button>
       </div>
     );
   }
@@ -184,6 +194,7 @@ const InvoicesPage: React.FC = () => {
         onClose={() => setIsFormOpen(false)}
         onSave={handleSaveInvoice}
         initialData={editingInvoice}
+        companyId={company.id} // Pass company.id here
       />
     </div>
   );

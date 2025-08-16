@@ -18,7 +18,7 @@ import InvoiceForm from '@/components/InvoiceForm';
 import InvoicePdfGenerator from '@/components/InvoicePdfGenerator';
 import InvoiceDisplay from '@/components/InvoiceDisplay';
 import Decimal from 'decimal.js';
-import useCompany from '@/hooks/useCompany';
+import useCompanySettings from '@/hooks/useCompanySettings'; // Import the new hook
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,9 +42,8 @@ const InvoiceDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
-  const { company, loading: companyLoading, error: companyError } = useCompany();
+  const { company, settings, loading: companySettingsLoading, error: companySettingsError, refetch: refetchCompanySettings } = useCompanySettings(); // Use the new hook
   const [invoice, setInvoice] = useState<InvoiceWithDetails | null>(null);
-  const [settings, setSettings] = useState<Tables<'settings'> | null>(null);
   const [loadingInvoiceDetails, setLoadingInvoiceDetails] = useState(true);
   const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
   const [isEditFormOpen, setIsEditFormOpen] = useState(false);
@@ -59,17 +58,17 @@ const InvoiceDetailsPage: React.FC = () => {
 
     setLoadingInvoiceDetails(true);
     try {
-      // Fetch settings data for the company
-      const { data: settingsData, error: settingsError } = await supabase
-        .from('settings')
-        .select('*')
-        .eq('company_id', company.id)
-        .single();
+      // Settings are now fetched by useCompanySettings, no need to fetch here
+      // const { data: settingsData, error: settingsError } = await supabase
+      //   .from('settings')
+      //   .select('*')
+      //   .eq('company_id', company.id)
+      //   .single();
 
-      if (settingsError && settingsError.code !== 'PGRST116') {
-        throw settingsError;
-      }
-      setSettings(settingsData);
+      // if (settingsError && settingsError.code !== 'PGRST116') {
+      //   throw settingsError;
+      // }
+      // setSettings(settingsData); // This state is no longer needed if settings come from hook
 
       // Fetch invoice details
       const { data, error } = await supabase
@@ -96,23 +95,23 @@ const InvoiceDetailsPage: React.FC = () => {
   }, [user, id, company, navigate]);
 
   useEffect(() => {
-    if (!authLoading && user && !companyLoading) {
+    if (!authLoading && user && !companySettingsLoading) {
       if (company) {
         fetchInvoiceDetails();
-      } else if (companyError) {
-        toast.error(companyError);
+      } else if (companySettingsError) {
+        toast.error(companySettingsError);
         setLoadingInvoiceDetails(false);
         navigate('/setup-company');
       }
     }
-  }, [user, authLoading, company, companyLoading, companyError, navigate, fetchInvoiceDetails]);
+  }, [user, authLoading, company, companySettingsLoading, companySettingsError, navigate, fetchInvoiceDetails]);
 
   const handleRecordPayment = () => {
     setIsPaymentFormOpen(true);
   };
 
   const handleSavePayment = (newPayment: Tables<'payments'>) => {
-    fetchInvoiceDetails();
+    fetchInvoiceDetails(); // Re-fetch invoice details to update totals and status
     setIsPaymentFormOpen(false);
   };
 
@@ -121,7 +120,7 @@ const InvoiceDetailsPage: React.FC = () => {
   };
 
   const handleSaveInvoice = (updatedInvoice: InvoiceWithDetails) => {
-    fetchInvoiceDetails();
+    fetchInvoiceDetails(); // Re-fetch invoice details to update
     setIsEditFormOpen(false);
   };
 
@@ -188,7 +187,7 @@ const InvoiceDetailsPage: React.FC = () => {
     }
   };
 
-  if (authLoading || companyLoading || loadingInvoiceDetails) {
+  if (authLoading || companySettingsLoading || loadingInvoiceDetails) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <p>Loading invoice details...</p>
@@ -196,10 +195,10 @@ const InvoiceDetailsPage: React.FC = () => {
     );
   }
 
-  if (companyError || !company?.id) {
+  if (companySettingsError || !company?.id) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">
-        <h2 className="text-xl font-semibold text-red-600 mb-4">Error: {companyError || 'Company not found.'}</h2>
+        <h2 className="text-xl font-semibold text-red-600 mb-4">Error: {companySettingsError || 'Company not found.'}</h2>
         <p className="text-muted-foreground mb-4">Please ensure your company is set up correctly in settings.</p>
         <Button onClick={() => navigate('/setup-company')}>Go to Company Setup</Button>
       </div>

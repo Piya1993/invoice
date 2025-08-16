@@ -13,7 +13,7 @@ import { useAuth } from '@/context/AuthContext';
 import { formatCurrency } from '@/lib/utils';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
-import useCompany from '@/hooks/useCompany';
+import useCompanySettings from '@/hooks/useCompanySettings'; // Import the new hook
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -27,7 +27,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import useDebounce from '@/hooks/useDebounce'; // Import the new hook
+import useDebounce from '@/hooks/useDebounce';
 
 // Extend Invoice type to include related client and invoice_items
 type InvoiceWithDetails = Tables<'invoices'> & {
@@ -37,7 +37,7 @@ type InvoiceWithDetails = Tables<'invoices'> & {
 
 const InvoicesPage: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
-  const { company, loading: companyLoading, error: companyError } = useCompany();
+  const { company, loading: companySettingsLoading, error: companySettingsError } = useCompanySettings(); // Use the new hook
   const navigate = useNavigate();
   const [invoices, setInvoices] = useState<InvoiceWithDetails[]>([]);
   const [loadingInvoices, setLoadingInvoices] = useState(true);
@@ -46,7 +46,7 @@ const InvoicesPage: React.FC = () => {
 
   // State for search term and debounced search term
   const [searchTerm, setSearchTerm] = useState('');
-  const debouncedSearchTerm = useDebounce(searchTerm, 500); // Debounce for 500ms
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
   // State for filter
   const [filterStatus, setFilterStatus] = useState<Enums<'invoice_status'> | 'all'>('all');
@@ -98,23 +98,23 @@ const InvoicesPage: React.FC = () => {
     } finally {
       setLoadingInvoices(false);
     }
-  }, [company, debouncedSearchTerm, filterStatus, currentPage, itemsPerPage]); // Depend on debouncedSearchTerm
+  }, [company, debouncedSearchTerm, filterStatus, currentPage, itemsPerPage]);
 
   useEffect(() => {
     if (!authLoading && !user) {
       navigate('/auth');
-    } else if (!companyLoading && company) {
+    } else if (!companySettingsLoading && company) {
       // Reset page to 1 when search term or filter status changes
       if (currentPage !== 1 && (debouncedSearchTerm !== searchTerm || filterStatus !== 'all')) {
         setCurrentPage(1);
       } else {
         fetchInvoices();
       }
-    } else if (!companyLoading && companyError) {
-      toast.error(companyError);
+    } else if (!companySettingsLoading && companySettingsError) {
+      toast.error(companySettingsError);
       setLoadingInvoices(false);
     }
-  }, [user, authLoading, company, companyLoading, companyError, navigate, fetchInvoices, debouncedSearchTerm, searchTerm, filterStatus, currentPage]); // Add debouncedSearchTerm to dependencies
+  }, [user, authLoading, company, companySettingsLoading, companySettingsError, navigate, fetchInvoices, debouncedSearchTerm, searchTerm, filterStatus, currentPage]);
 
   const handleSaveInvoice = (newInvoice: InvoiceWithDetails) => {
     fetchInvoices();
@@ -159,7 +159,7 @@ const InvoicesPage: React.FC = () => {
     setCurrentPage(prev => Math.min(totalPages, prev + 1));
   };
 
-  if (authLoading || companyLoading || loadingInvoices) {
+  if (authLoading || companySettingsLoading || loadingInvoices) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <p>Loading invoices...</p>
@@ -167,10 +167,10 @@ const InvoicesPage: React.FC = () => {
     );
   }
 
-  if (companyError || !company?.id) {
+  if (companySettingsError || !company?.id) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">
-        <h2 className="text-xl font-semibold text-red-600 mb-4">Error: {companyError || 'Company not found.'}</h2>
+        <h2 className="text-xl font-semibold text-red-600 mb-4">Error: {companySettingsError || 'Company not found.'}</h2>
         <p className="text-muted-foreground mb-4">Please ensure your company is set up correctly in settings.</p>
         <Button onClick={() => navigate('/setup-company')}>Go to Company Setup</Button>
       </div>
@@ -197,11 +197,11 @@ const InvoicesPage: React.FC = () => {
               <Input
                 placeholder="Search by invoice number or client name..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)} // Update searchTerm directly
+                onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-9"
               />
             </div>
-            <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as Enums<'invoice_status'> | 'all')}> // Update filterStatus directly
+            <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as Enums<'invoice_status'> | 'all')}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
@@ -222,7 +222,7 @@ const InvoicesPage: React.FC = () => {
           <CardTitle>Your Invoices</CardTitle>
         </CardHeader>
         <CardContent>
-          {invoices.length === 0 && !loadingInvoices ? ( // Check loadingInvoices to avoid "No invoices found" during search
+          {invoices.length === 0 && !loadingInvoices ? (
             <p className="text-muted-foreground text-center py-8">No invoices found. Create your first invoice!</p>
           ) : (
             <>

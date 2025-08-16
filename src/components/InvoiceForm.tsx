@@ -17,6 +17,7 @@ import { toSmallestUnit, fromSmallestUnit, formatCurrency, cn } from '@/lib/util
 import { CalendarIcon, PlusCircle, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import Decimal from 'decimal.js';
+import useCompanySettings from '@/hooks/useCompanySettings'; // Import the new hook
 
 // Define a type for an invoice item in the form, including a temporary ID for new items
 type FormInvoiceItem = TablesInsert<'invoice_items'> & { tempId: string };
@@ -31,10 +32,10 @@ interface InvoiceFormProps {
 
 const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, initialData, companyId }) => {
   const { user } = useAuth();
+  const { company, settings: companySettings, loading: companySettingsLoading, error: companySettingsError } = useCompanySettings(); // Use the new hook
   const [loading, setLoading] = useState(false);
   const [clients, setClients] = useState<Tables<'clients'>[]>([]);
   const [products, setProducts] = useState<Tables<'products'>[]>([]);
-  const [companySettings, setCompanySettings] = useState<Tables<'settings'> | null>(null);
 
   const [invoiceNumber, setInvoiceNumber] = useState(initialData?.number || '');
   const [clientId, setClientId] = useState(initialData?.client_id || '');
@@ -54,39 +55,15 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
 
   const invoiceStatuses: Enums<'invoice_status'>[] = ['draft', 'sent', 'paid', 'overdue', 'void'];
 
-  const fetchClientsProductsAndSettings = useCallback(async () => {
-    if (!user?.id || !companyId) return; // Ensure companyId is available
+  const fetchClientsAndProducts = useCallback(async () => {
+    if (!user?.id || !companyId) return;
 
     setLoading(true);
     try {
-      // Fetch company currency and settings
-      const { data: companyData, error: companyError } = await supabase
-        .from('companies')
-        .select('id, currency')
-        .eq('id', companyId) // Use companyId prop
-        .single();
-
-      if (companyError || !companyData) {
-        throw new Error('Could not find company details. Please ensure your company is set up.');
-      }
-
-      setCurrency(companyData.currency); // Set default currency from company settings
-
-      const { data: settingsData, error: settingsError } = await supabase
-        .from('settings')
-        .select('*')
-        .eq('company_id', companyId) // Use companyId prop
-        .single();
-
-      if (settingsError && settingsError.code !== 'PGRST116') { // PGRST116 means no rows found
-        throw settingsError;
-      }
-      setCompanySettings(settingsData);
-
       const { data: clientsData, error: clientsError } = await supabase
         .from('clients')
         .select('*')
-        .eq('company_id', companyId) // Use companyId prop
+        .eq('company_id', companyId)
         .order('name', { ascending: true });
 
       if (clientsError) throw clientsError;
@@ -95,23 +72,23 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
       const { data: productsData, error: productsError } = await supabase
         .from('products')
         .select('*')
-        .eq('company_id', companyId) // Use companyId prop
+        .eq('company_id', companyId)
         .order('name', { ascending: true });
 
       if (productsError) throw productsError;
       setProducts(productsData || []);
 
     } catch (error: any) {
-      console.error('Error fetching clients/products/settings:', error);
-      toast.error(error.message || 'Failed to load clients, products, or settings.');
+      console.error('Error fetching clients/products:', error);
+      toast.error(error.message || 'Failed to load clients or products.');
     } finally {
       setLoading(false);
     }
-  }, [user, companyId]); // Add companyId to dependencies
+  }, [user, companyId]);
 
   useEffect(() => {
     if (isOpen) {
-      fetchClientsProductsAndSettings();
+      fetchClientsAndProducts();
       if (initialData) {
         setInvoiceNumber(initialData.number || '');
         setClientId(initialData.client_id);
@@ -124,25 +101,24 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
         setInvoiceItems(initialData.invoice_items.map(item => ({ ...item, tempId: item.id })));
       } else {
         // Reset form for new invoice
-        setInvoiceNumber(''); // Will be set by useEffect below
+        setInvoiceNumber('');
         setClientId('');
         setIssueDate(new Date());
         setDueDate(new Date());
         setStatus('draft');
         setNotes('');
         setTerms('');
-        // Initial item will be set once companySettings are loaded
         setInvoiceItems([]);
       }
     }
-  }, [isOpen, initialData, fetchClientsProductsAndSettings]);
-
+  }, [isOpen, initialData, fetchClientsAndProducts]);
 
   // Effect to set initial invoice number and first item for new invoices
   useEffect(() => {
-    if (isOpen && !initialData && companySettings) {
-      const nextNum = companySettings.next_number.toString().padStart(3, '0'); // e.g., 1 -> "001"
+    if (isOpen && !initialData && companySettings && company) {
+      const nextNum = companySettings.next_number.toString().padStart(3, '0');
       setInvoiceNumber(`${companySettings.numbering_prefix}${nextNum}`);
+      setCurrency(company.currency || 'PKR'); // Ensure currency is set from company
       // Add initial item with default tax rate
       setInvoiceItems([{
         tempId: Date.now().toString(), // Unique ID for new items
@@ -155,7 +131,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
         product_id: null,
       }]);
     }
-  }, [isOpen, initialData, companySettings]);
+  }, [isOpen, initialData, companySettings, company]);
 
 
   const calculateTotals = useCallback(() => {
@@ -165,9 +141,9 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
 
     invoiceItems.forEach(item => {
       const qty = new Decimal(item.qty || 0);
-      const unitPriceInSmallestUnit = new Decimal(item.unit_price || 0); // Keep in smallest unit
-      const taxRate = new Decimal(item.tax_rate || 0).dividedBy(100); // Convert percentage to decimal
-      const discountInSmallestUnit = new Decimal(item.discount || 0); // Keep in smallest unit
+      const unitPriceInSmallestUnit = new Decimal(item.unit_price || 0);
+      const taxRate = new Decimal(item.tax_rate || 0).dividedBy(100);
+      const discountInSmallestUnit = new Decimal(item.discount || 0);
 
       const lineTotalBeforeTaxInSmallestUnit = qty.times(unitPriceInSmallestUnit);
       const lineTaxInSmallestUnit = lineTotalBeforeTaxInSmallestUnit.times(taxRate);
@@ -180,7 +156,6 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
 
     const currentTotal = currentSubtotal.plus(currentTaxTotal).minus(currentDiscountTotal);
 
-    // Store results as numbers (which Decimal.js can convert to)
     setSubtotal(currentSubtotal.toNumber());
     setTaxTotal(currentTaxTotal.toNumber());
     setDiscountTotal(currentDiscountTotal.toNumber());
@@ -222,16 +197,12 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
               product_id: value,
               title: selectedProduct?.name || '',
               unit_price: selectedProduct?.default_price || 0,
-              // Do NOT reset qty, tax_rate, or discount when product changes
-              // These should be manually adjustable by the user
             };
           }
           if (field === 'qty' || field === 'tax_rate') {
-            // These are numbers directly
             return { ...item, [field]: parseFloat(value) || 0 };
           }
           if (field === 'unit_price' || field === 'discount') {
-            // Convert to smallest unit for storage
             return { ...item, [field]: toSmallestUnit(value) };
           }
           return { ...item, [field]: value };
@@ -283,9 +254,9 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
         tax_total: taxTotal,
         discount_total: discountTotal,
         total,
-        amount_paid: initialData?.amount_paid || 0, // Keep existing amount paid for updates
-        amount_due: total - (initialData?.amount_paid || 0), // Recalculate amount due
-        company_id: companyId, // Use the prop
+        amount_paid: initialData?.amount_paid || 0,
+        amount_due: total - (initialData?.amount_paid || 0),
+        company_id: companyId,
       };
 
       let savedInvoice: Tables<'invoices'>;
@@ -430,7 +401,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
                 id="invoiceNumber"
                 value={invoiceNumber}
                 onChange={(e) => setInvoiceNumber(e.target.value)}
-                disabled={loading || (companySettings && !initialData)} // Disable if auto-generated for new invoices
+                disabled={loading || (companySettings && !initialData)}
               />
             </div>
           </div>

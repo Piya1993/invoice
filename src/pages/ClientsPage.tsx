@@ -10,7 +10,7 @@ import { Tables } from '@/types/supabase';
 import { toast } from 'react-hot-toast';
 import ClientForm from '@/components/ClientForm';
 import { useAuth } from '@/context/AuthContext';
-import useCompany from '@/hooks/useCompany';
+import useCompanySettings from '@/hooks/useCompanySettings'; // Import the new hook
 import { Input } from '@/components/ui/input';
 import {
   AlertDialog,
@@ -23,11 +23,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import useDebounce from '@/hooks/useDebounce'; // Import the new hook
+import useDebounce from '@/hooks/useDebounce';
 
 const ClientsPage: React.FC = () => {
   const { user } = useAuth();
-  const { company, loading: companyLoading, error: companyError } = useCompany();
+  const { company, loading: companySettingsLoading, error: companySettingsError } = useCompanySettings(); // Use the new hook
   const [clients, setClients] = useState<Tables<'clients'>[]>([]);
   const [loadingClients, setLoadingClients] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -35,7 +35,7 @@ const ClientsPage: React.FC = () => {
 
   // State for search term and debounced search term
   const [searchTerm, setSearchTerm] = useState('');
-  const debouncedSearchTerm = useDebounce(searchTerm, 500); // Debounce for 500ms
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
   // State for pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -77,21 +77,21 @@ const ClientsPage: React.FC = () => {
     } finally {
       setLoadingClients(false);
     }
-  }, [company, debouncedSearchTerm, currentPage, itemsPerPage]); // Depend on debouncedSearchTerm
+  }, [company, debouncedSearchTerm, currentPage, itemsPerPage]);
 
   useEffect(() => {
-    if (!companyLoading && company) {
+    if (!companySettingsLoading && company) {
       // Reset page to 1 when search term changes
       if (currentPage !== 1 && debouncedSearchTerm !== searchTerm) {
         setCurrentPage(1);
       } else {
         fetchClients();
       }
-    } else if (!companyLoading && companyError) {
-      toast.error(companyError);
+    } else if (!companySettingsLoading && companySettingsError) {
+      toast.error(companySettingsError);
       setLoadingClients(false);
     }
-  }, [company, companyLoading, companyError, fetchClients, debouncedSearchTerm, searchTerm, currentPage]); // Add debouncedSearchTerm to dependencies
+  }, [company, companySettingsLoading, companySettingsError, fetchClients, debouncedSearchTerm, searchTerm, currentPage]);
 
   const handleSaveClient = (newClient: Tables<'clients'>) => {
     fetchClients();
@@ -132,7 +132,7 @@ const ClientsPage: React.FC = () => {
     setCurrentPage(prev => Math.min(totalPages, prev + 1));
   };
 
-  if (companyLoading || loadingClients) {
+  if (companySettingsLoading || loadingClients) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <p>Loading clients...</p>
@@ -140,10 +140,10 @@ const ClientsPage: React.FC = () => {
     );
   }
 
-  if (companyError || !company?.id) {
+  if (companySettingsError || !company?.id) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">
-        <h2 className="text-xl font-semibold text-red-600 mb-4">Error: {companyError || 'Company not found.'}</h2>
+        <h2 className="text-xl font-semibold text-red-600 mb-4">Error: {companySettingsError || 'Company not found.'}</h2>
         <p className="text-muted-foreground mb-4">Please ensure your company is set up correctly in settings.</p>
         <Button onClick={() => window.location.reload()}>Retry</Button>
       </div>
@@ -169,7 +169,7 @@ const ClientsPage: React.FC = () => {
             <Input
               placeholder="Search by name, email, or phone..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)} // Update searchTerm directly
+              onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-9"
             />
           </div>
@@ -181,7 +181,7 @@ const ClientsPage: React.FC = () => {
           <CardTitle>Your Clients</CardTitle>
         </CardHeader>
         <CardContent>
-          {clients.length === 0 && !loadingClients ? ( // Check loadingClients to avoid "No clients found" during search
+          {clients.length === 0 && !loadingClients ? (
             <p className="text-muted-foreground text-center py-8">No clients found. Add your first client!</p>
           ) : (
             <>

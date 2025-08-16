@@ -5,13 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PlusCircle, Edit, Trash2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
-import { supabase } => '@/lib/supabase/client';
+import { supabase } from '@/lib/supabase/client';
 import { Tables } from '@/types/supabase';
 import { toast } from 'react-hot-toast';
 import ProductForm from '@/components/ProductForm';
 import { useAuth } from '@/context/AuthContext';
 import { formatCurrency } from '@/lib/utils';
-import useCompany from '@/hooks/useCompany';
+import useCompanySettings from '@/hooks/useCompanySettings'; // Import the new hook
 import { Input } from '@/components/ui/input';
 import {
   AlertDialog,
@@ -24,11 +24,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import useDebounce from '@/hooks/useDebounce'; // Import the new hook
+import useDebounce from '@/hooks/useDebounce';
 
 const ProductsPage: React.FC = () => {
   const { user } = useAuth();
-  const { company, loading: companyLoading, error: companyError } = useCompany();
+  const { company, loading: companySettingsLoading, error: companySettingsError } = useCompanySettings(); // Use the new hook
   const [products, setProducts] = useState<Tables<'products'>[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -36,7 +36,7 @@ const ProductsPage: React.FC = () => {
 
   // State for search term and debounced search term
   const [searchTerm, setSearchTerm] = useState('');
-  const debouncedSearchTerm = useDebounce(searchTerm, 500); // Debounce for 500ms
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
   // State for pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -78,21 +78,21 @@ const ProductsPage: React.FC = () => {
     } finally {
       setLoadingProducts(false);
     }
-  }, [company, debouncedSearchTerm, currentPage, itemsPerPage]); // Depend on debouncedSearchTerm
+  }, [company, debouncedSearchTerm, currentPage, itemsPerPage]);
 
   useEffect(() => {
-    if (!companyLoading && company) {
+    if (!companySettingsLoading && company) {
       // Reset page to 1 when search term changes
       if (currentPage !== 1 && debouncedSearchTerm !== searchTerm) {
         setCurrentPage(1);
       } else {
         fetchProducts();
       }
-    } else if (!companyLoading && companyError) {
-      toast.error(companyError);
+    } else if (!companySettingsLoading && companySettingsError) {
+      toast.error(companySettingsError);
       setLoadingProducts(false);
     }
-  }, [company, companyLoading, companyError, fetchProducts, debouncedSearchTerm, searchTerm, currentPage]); // Add debouncedSearchTerm to dependencies
+  }, [company, companySettingsLoading, companySettingsError, fetchProducts, debouncedSearchTerm, searchTerm, currentPage]);
 
   const handleSaveProduct = (newProduct: Tables<'products'>) => {
     fetchProducts();
@@ -133,7 +133,7 @@ const ProductsPage: React.FC = () => {
     setCurrentPage(prev => Math.min(totalPages, prev + 1));
   };
 
-  if (companyLoading || loadingProducts) {
+  if (companySettingsLoading || loadingProducts) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <p>Loading products...</p>
@@ -141,10 +141,10 @@ const ProductsPage: React.FC = () => {
     );
   }
 
-  if (companyError || !company?.id) {
+  if (companySettingsError || !company?.id) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">
-        <h2 className="text-xl font-semibold text-red-600 mb-4">Error: {companyError || 'Company not found.'}</h2>
+        <h2 className="text-xl font-semibold text-red-600 mb-4">Error: {companySettingsError || 'Company not found.'}</h2>
         <p className="text-muted-foreground mb-4">Please ensure your company is set up correctly in settings.</p>
         <Button onClick={() => window.location.reload()}>Retry</Button>
       </div>
@@ -170,7 +170,7 @@ const ProductsPage: React.FC = () => {
             <Input
               placeholder="Search by name or description..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)} // Update searchTerm directly
+              onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-9"
             />
           </div>
@@ -182,7 +182,7 @@ const ProductsPage: React.FC = () => {
           <CardTitle>Your Products</CardTitle>
         </CardHeader>
         <CardContent>
-          {products.length === 0 && !loadingProducts ? ( // Check loadingProducts to avoid "No products found" during search
+          {products.length === 0 && !loadingProducts ? (
             <p className="text-muted-foreground text-center py-8">No products found. Add your first product!</p>
           ) : (
             <>

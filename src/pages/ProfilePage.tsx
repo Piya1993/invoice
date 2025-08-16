@@ -2,18 +2,18 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import useCompany from '@/hooks/useCompany';
+import useCompanySettings from '@/hooks/useCompanySettings'; // Import the new hook
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'react-hot-toast';
-import { User, Building, KeyRound } from 'lucide-react'; // Added KeyRound icon
-import { supabase } from '@/lib/supabase/client'; // Import supabase client
+import { User, Building, KeyRound } from 'lucide-react';
+import { supabase } from '@/lib/supabase/client';
 
 const ProfilePage: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
-  const { company, loading: companyLoading } = useCompany();
+  const { company, loading: companySettingsLoading } = useCompanySettings(); // Use the new hook
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
@@ -53,7 +53,7 @@ const ProfilePage: React.FC = () => {
     }
   };
 
-  if (authLoading || companyLoading) {
+  if (authLoading || companySettingsLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <p>Loading profile...</p>

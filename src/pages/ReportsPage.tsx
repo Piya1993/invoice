@@ -10,8 +10,8 @@ import { useAuth } from '@/context/AuthContext';
 import { formatCurrency, fromSmallestUnit } from '@/lib/utils';
 import Decimal from 'decimal.js';
 import { subDays } from 'date-fns';
-import useCompany from '@/hooks/useCompany'; // Import the new hook
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'; // Import Table components
+import useCompanySettings from '@/hooks/useCompanySettings'; // Import the new hook
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 // Extend Invoice type to include related client and invoice_items for calculations
 type InvoiceWithDetails = Tables<'invoices'> & {
@@ -21,8 +21,8 @@ type InvoiceWithDetails = Tables<'invoices'> & {
 
 const ReportsPage: React.FC = () => {
   const { user } = useAuth();
-  const { company, loading: companyLoading, error: companyError } = useCompany(); // Use the new hook
-  const [loadingReports, setLoadingReports] = useState(true); // Renamed to avoid conflict
+  const { company, settings, loading: companySettingsLoading, error: companySettingsError } = useCompanySettings(); // Use the new hook
+  const [loadingReports, setLoadingReports] = useState(true);
   const [reportData, setReportData] = useState({
     totalInvoices: 0,
     paidInvoices: 0,
@@ -41,11 +41,11 @@ const ReportsPage: React.FC = () => {
     bestSellingProductName: 'N/A',
     bestSellingProductRevenue: new Decimal(0),
     totalProductRevenue: new Decimal(0),
-    detailedClientRevenue: [] as { name: string; revenue: Decimal }[], // New state for detailed client revenue
-    detailedProductRevenue: [] as { name: string; revenue: Decimal }[], // New state for detailed product revenue
+    detailedClientRevenue: [] as { name: string; revenue: Decimal }[],
+    detailedProductRevenue: [] as { name: string; revenue: Decimal }[],
   });
-  const [displayCurrency, setDisplayCurrency] = useState('PKR'); // State to hold the actual currency
-  const [error, setError] = useState<string | null>(null); // State to hold error messages
+  const [displayCurrency, setDisplayCurrency] = useState('PKR');
+  const [error, setError] = useState<string | null>(null);
 
   const fetchReportData = useCallback(async () => {
     if (!company?.id) {
@@ -54,9 +54,9 @@ const ReportsPage: React.FC = () => {
     }
 
     setLoadingReports(true);
-    setError(null); // Clear previous errors
+    setError(null);
     try {
-      setDisplayCurrency(company.currency || 'PKR'); // Set the display currency from fetched company
+      setDisplayCurrency(company.currency || 'PKR');
 
       // Fetch all invoices with items and clients
       const { data: invoicesData, error: invoicesError } = await supabase
@@ -89,12 +89,12 @@ const ReportsPage: React.FC = () => {
       let overdueInvoices = 0;
       let draftInvoices = 0;
       let voidInvoices = 0;
-      let totalRevenue = new Decimal(0); // Sum of invoice.total
-      let totalOutstanding = new Decimal(0); // Sum of invoice.amount_due
-      let totalPaidAmount = new Decimal(0); // Sum of invoice.amount_paid
+      let totalRevenue = new Decimal(0);
+      let totalOutstanding = new Decimal(0);
+      let totalPaidAmount = new Decimal(0);
 
-      const clientRevenueMap = new Map<string, Decimal>(); // client_id -> total revenue from this client
-      const productRevenueMap = new Map<string, Decimal>(); // product_id -> total revenue from this product
+      const clientRevenueMap = new Map<string, Decimal>();
+      const productRevenueMap = new Map<string, Decimal>();
 
       invoicesData.forEach((invoice: InvoiceWithDetails) => {
         switch (invoice.status) {
@@ -151,7 +151,7 @@ const ReportsPage: React.FC = () => {
       let totalProducts = productsData.length;
       let bestSellingProductName = 'N/A';
       let bestSellingProductRevenue = new Decimal(0);
-      let totalProductRevenue = new Decimal(0); // Sum of all product revenues
+      let totalProductRevenue = new Decimal(0);
       const detailedProductRevenue: { name: string; revenue: Decimal }[] = [];
 
       if (productRevenueMap.size > 0) {
@@ -201,15 +201,15 @@ const ReportsPage: React.FC = () => {
   }, [company]);
 
   useEffect(() => {
-    if (!companyLoading && company) {
+    if (!companySettingsLoading && company) {
       fetchReportData();
-    } else if (!companyLoading && companyError) {
-      toast.error(companyError);
+    } else if (!companySettingsLoading && companySettingsError) {
+      toast.error(companySettingsError);
       setLoadingReports(false);
     }
-  }, [company, companyLoading, companyError, fetchReportData]);
+  }, [company, companySettingsLoading, companySettingsError, fetchReportData]);
 
-  if (companyLoading || loadingReports) {
+  if (companySettingsLoading || loadingReports) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <p>Loading reports...</p>
@@ -217,10 +217,10 @@ const ReportsPage: React.FC = () => {
     );
   }
 
-  if (companyError) {
+  if (companySettingsError) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">
-        <h2 className="text-xl font-semibold text-red-600 mb-4">Error: {companyError}</h2>
+        <h2 className="text-xl font-semibold text-red-600 mb-4">Error: {companySettingsError}</h2>
         <p className="text-muted-foreground mb-4">Please ensure your company is set up correctly in settings.</p>
         <Button onClick={() => window.location.reload()}>Retry</Button>
       </div>

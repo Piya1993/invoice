@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useNavigate } from 'react-router-dom'; // Corrected hook
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'react-hot-toast';
@@ -10,11 +10,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency, fromSmallestUnit } from '@/lib/utils';
 import Decimal from 'decimal.js';
-import { DollarSign, FileText, TrendingUp, Wallet, Clock, PlusCircle, Users, Package } from 'lucide-react'; // Added PlusCircle, Users, Package
+import { DollarSign, FileText, TrendingUp, Wallet, Clock, PlusCircle, Users, Package } from 'lucide-react';
 import { Tables } from '@/types/supabase';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
-import useCompany from '@/hooks/useCompany'; // Import the new hook
+import useCompanySettings from '@/hooks/useCompanySettings'; // Import the new hook
 
 // Extend Invoice type to include related client for display
 type InvoiceWithClient = Tables<'invoices'> & {
@@ -23,9 +23,9 @@ type InvoiceWithClient = Tables<'invoices'> & {
 
 const Dashboard: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
-  const { company, loading: companyLoading, error: companyError } = useCompany(); // Use the new hook
-  const navigate = useNavigate(); // Corrected hook
-  const [loadingDashboard, setLoadingDashboard] = useState(true); // Renamed to avoid conflict
+  const { company, settings, loading: companySettingsLoading, error: companySettingsError, refetch: refetchCompanySettings } = useCompanySettings(); // Use the new hook
+  const navigate = useNavigate();
+  const [loadingDashboard, setLoadingDashboard] = useState(true);
   const [dashboardData, setDashboardData] = useState({
     totalInvoices: 0,
     totalRevenue: new Decimal(0),
@@ -99,13 +99,13 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     if (!authLoading && !user) {
       navigate('/auth');
-    } else if (!companyLoading && company) {
+    } else if (!companySettingsLoading && company) {
       fetchDashboardData();
-    } else if (!companyLoading && companyError) {
-      toast.error(companyError);
+    } else if (!companySettingsLoading && companySettingsError) {
+      toast.error(companySettingsError);
       setLoadingDashboard(false);
     }
-  }, [user, authLoading, company, companyLoading, companyError, navigate, fetchDashboardData]);
+  }, [user, authLoading, company, companySettingsLoading, companySettingsError, navigate, fetchDashboardData]);
 
   const handleSignOut = async () => {
     const { error } = await supabase.auth.signOut();
@@ -116,7 +116,7 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  if (authLoading || companyLoading || loadingDashboard) {
+  if (authLoading || companySettingsLoading || loadingDashboard) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <p>Loading dashboard...</p>
@@ -124,10 +124,10 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  if (companyError) {
+  if (companySettingsError) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">
-        <h2 className="text-xl font-semibold text-red-600 mb-4">Error: {companyError}</h2>
+        <h2 className="text-xl font-semibold text-red-600 mb-4">Error: {companySettingsError}</h2>
         <p className="text-muted-foreground mb-4">Please ensure your company is set up correctly in settings.</p>
         <Button onClick={() => navigate('/setup-company')}>Go to Company Setup</Button>
       </div>

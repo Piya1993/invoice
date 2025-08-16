@@ -3,10 +3,10 @@
 import React, { ReactNode, useEffect, useState, useCallback } from 'react';
 import Sidebar from '@/components/Sidebar';
 import { useAuth } from '@/context/AuthContext';
-import { useNavigate, useLocation, Outlet } from 'react-router-dom'; // Corrected import
+import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'react-hot-toast';
-import useCompany from '@/hooks/useCompany'; // Import the new hook
+import useCompanySettings from '@/hooks/useCompanySettings'; // Import the new hook
 
 interface LayoutProps {
   // children: ReactNode; // No longer needed with Outlet
@@ -14,12 +14,12 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = () => {
   const { user, loading: authLoading } = useAuth();
-  const { company, loading: companyLoading, error: companyError } = useCompany(); // Use the new hook
+  const { company, loading: companySettingsLoading, error: companySettingsError } = useCompanySettings(); // Use the new hook
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    if (authLoading || companyLoading) {
+    if (authLoading || companySettingsLoading) {
       // Still loading authentication or company data, do nothing yet
       return;
     }
@@ -44,9 +44,9 @@ const Layout: React.FC<LayoutProps> = () => {
         navigate('/dashboard');
       }
     }
-  }, [user, authLoading, company, companyLoading, navigate, location.pathname]);
+  }, [user, authLoading, company, companySettingsLoading, navigate, location.pathname]);
 
-  if (authLoading || companyLoading) {
+  if (authLoading || companySettingsLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <p>Loading application...</p>

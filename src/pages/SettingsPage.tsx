@@ -9,58 +9,37 @@ import { Tables } from '@/types/supabase';
 import { toast } from 'react-hot-toast';
 import SettingsForm from '@/components/SettingsForm';
 import { useAuth } from '@/context/AuthContext';
-import useCompany from '@/hooks/useCompany'; // Import the new hook
-import { useNavigate } from 'react-router-dom'; // Import useNavigate
+import useCompanySettings from '@/hooks/useCompanySettings'; // Import the new hook
+import { useNavigate } from 'react-router-dom';
 
 const SettingsPage: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
-  const { company, loading: companyLoading, error: companyError } = useCompany(); // Use the new hook
+  const { company, settings, loading: companySettingsLoading, error: companySettingsError, refetch: refetchCompanySettings } = useCompanySettings(); // Use the new hook
   const navigate = useNavigate();
-  const [settings, setSettings] = useState<Tables<'settings'> | null>(null);
-  const [loadingSettings, setLoadingSettings] = useState(true); // New state for settings loading
   const [isFormOpen, setIsFormOpen] = useState(false);
 
-  const fetchSettingsForCompany = useCallback(async () => {
-    if (!company?.id) {
-      setLoadingSettings(false);
-      setSettings(null); // Ensure settings is null if no company
-      return;
-    }
-    setLoadingSettings(true);
-    try {
-      const { data: settingsData, error: settingsError } = await supabase
-        .from('settings')
-        .select('*')
-        .eq('company_id', company.id)
-        .single();
-
-      if (settingsError && settingsError.code !== 'PGRST116') {
-        throw settingsError;
-      }
-      setSettings(settingsData);
-    } catch (error: any) {
-      console.error('Error fetching settings:', error);
-      toast.error(error.message || 'Failed to fetch settings.');
-      setSettings(null);
-    } finally {
-      setLoadingSettings(false);
-    }
-  }, [company]);
+  // No need for separate fetchSettingsForCompany or loadingSettings state here
+  // as useCompanySettings provides both company and settings and their loading state.
 
   useEffect(() => {
-    if (!authLoading && user && !companyLoading) {
-      fetchSettingsForCompany();
+    if (!authLoading && !user) {
+      navigate('/auth');
+    } else if (!companySettingsLoading && companySettingsError) {
+      toast.error(companySettingsError);
+      // If there's an error and no company, suggest setup
+      if (!company) {
+        navigate('/setup-company');
+      }
     }
-  }, [user, authLoading, company, companyLoading, fetchSettingsForCompany]);
+  }, [user, authLoading, company, companySettingsLoading, companySettingsError, navigate]);
 
   const handleSaveSettings = (updatedCompany: Tables<'companies'>, updatedSettings: Tables<'settings'>) => {
-    // The useCompany hook will re-fetch and update 'company' state globally.
-    // We just need to update local 'settings' state.
-    setSettings(updatedSettings);
+    // After saving, trigger a refetch in the hook to update global state
+    refetchCompanySettings();
     setIsFormOpen(false);
   };
 
-  if (authLoading || companyLoading || loadingSettings) { // Combine loading states
+  if (authLoading || companySettingsLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <p>Loading settings...</p>
@@ -68,10 +47,10 @@ const SettingsPage: React.FC = () => {
     );
   }
 
-  if (companyError) {
+  if (companySettingsError) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">
-        <h2 className="text-xl font-semibold text-red-600 mb-4">Error: {companyError}</h2>
+        <h2 className="text-xl font-semibold text-red-600 mb-4">Error: {companySettingsError}</h2>
         <p className="text-muted-foreground mb-4">Please ensure your company is set up correctly.</p>
         <Button onClick={() => navigate('/setup-company')}>Go to Company Setup</Button>
       </div>

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, Edit, Search } from 'lucide-react';
+import { PlusCircle, Edit, Search, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react'; // Added ArrowUpDown
 import { supabase } from '@/lib/supabase/client';
 import { Tables } from '@/types/supabase';
 import { toast } from 'react-hot-toast';
@@ -14,7 +14,7 @@ import useCompanySettings from '@/hooks/useCompanySettings';
 import { Input } from '@/components/ui/input';
 import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog';
 import useDebounce from '@/hooks/useDebounce';
-import PaginationControls from '@/components/PaginationControls'; // Import the new component
+import PaginationControls from '@/components/PaginationControls';
 
 const ClientsPage: React.FC = () => {
   const { user } = useAuth();
@@ -32,6 +32,10 @@ const ClientsPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [totalCount, setTotalCount] = useState(0);
+
+  // State for sorting
+  const [sortColumn, setSortColumn] = useState<keyof Tables<'clients'>>('name');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   const fetchClients = useCallback(async () => {
     if (!company?.id) {
@@ -54,7 +58,8 @@ const ClientsPage: React.FC = () => {
         query = query.or(`name.ilike.%${debouncedSearchTerm}%,email.ilike.%${debouncedSearchTerm}%,phone.ilike.%${debouncedSearchTerm}%`);
       }
 
-      query = query.order('name', { ascending: true })
+      // Apply sorting
+      query = query.order(sortColumn, { ascending: sortDirection === 'asc' })
                    .range(from, to);
 
       const { data, error, count } = await query;
@@ -68,12 +73,12 @@ const ClientsPage: React.FC = () => {
     } finally {
       setLoadingClients(false);
     }
-  }, [company, debouncedSearchTerm, currentPage, itemsPerPage]);
+  }, [company, debouncedSearchTerm, currentPage, itemsPerPage, sortColumn, sortDirection]);
 
   useEffect(() => {
     if (!companySettingsLoading && company) {
-      // Reset page to 1 when search term changes
-      if (currentPage !== 1 && debouncedSearchTerm !== searchTerm) {
+      // Reset page to 1 when search term or sort changes
+      if (currentPage !== 1 && (debouncedSearchTerm !== searchTerm || sortColumn !== 'name' || sortDirection !== 'asc')) {
         setCurrentPage(1);
       } else {
         fetchClients();
@@ -82,7 +87,7 @@ const ClientsPage: React.FC = () => {
       toast.error(companySettingsError);
       setLoadingClients(false);
     }
-  }, [company, companySettingsLoading, companySettingsError, fetchClients, debouncedSearchTerm, searchTerm, currentPage]);
+  }, [company, companySettingsLoading, companySettingsError, fetchClients, debouncedSearchTerm, searchTerm, currentPage, sortColumn, sortDirection]);
 
   const handleSaveClient = (newClient: Tables<'clients'>) => {
     fetchClients();
@@ -111,6 +116,27 @@ const ClientsPage: React.FC = () => {
       toast.error(error.message || 'Failed to delete client.');
       setLoadingClients(false);
     }
+  };
+
+  const handleSort = (column: keyof Tables<'clients'>) => {
+    if (sortColumn === column) {
+      setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+    setCurrentPage(1); // Reset to first page on new sort
+  };
+
+  const renderSortIcon = (column: keyof Tables<'clients'>) => {
+    if (sortColumn === column) {
+      return sortDirection === 'asc' ? (
+        <ArrowUpDown className="ml-2 h-4 w-4 rotate-180" />
+      ) : (
+        <ArrowUpDown className="ml-2 h-4 w-4" />
+      );
+    }
+    return <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />;
   };
 
   const totalPages = Math.ceil(totalCount / itemsPerPage);
@@ -179,9 +205,21 @@ const ClientsPage: React.FC = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Phone</TableHead>
+                    <TableHead className="cursor-pointer hover:text-primary group" onClick={() => handleSort('name')}>
+                      <div className="flex items-center">
+                        Name {renderSortIcon('name')}
+                      </div>
+                    </TableHead>
+                    <TableHead className="cursor-pointer hover:text-primary group" onClick={() => handleSort('email')}>
+                      <div className="flex items-center">
+                        Email {renderSortIcon('email')}
+                      </div>
+                    </TableHead>
+                    <TableHead className="cursor-pointer hover:text-primary group" onClick={() => handleSort('phone')}>
+                      <div className="flex items-center">
+                        Phone {renderSortIcon('phone')}
+                      </div>
+                    </TableHead>
                     <TableHead>Address</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>

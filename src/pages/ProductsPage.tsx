@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, Edit, Search } from 'lucide-react';
+import { PlusCircle, Edit, Search, ArrowUpDown } from 'lucide-react'; // Added ArrowUpDown
 import { supabase } from '@/lib/supabase/client';
 import { Tables } from '@/types/supabase';
 import { toast } from 'react-hot-toast';
@@ -15,7 +15,7 @@ import useCompanySettings from '@/hooks/useCompanySettings';
 import { Input } from '@/components/ui/input';
 import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog';
 import useDebounce from '@/hooks/useDebounce';
-import PaginationControls from '@/components/PaginationControls'; // Import the new component
+import PaginationControls from '@/components/PaginationControls';
 
 const ProductsPage: React.FC = () => {
   const { user } = useAuth();
@@ -33,6 +33,10 @@ const ProductsPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [totalCount, setTotalCount] = useState(0);
+
+  // State for sorting
+  const [sortColumn, setSortColumn] = useState<keyof Tables<'products'>>('name');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   const fetchProducts = useCallback(async () => {
     if (!company?.id) {
@@ -55,7 +59,8 @@ const ProductsPage: React.FC = () => {
         query = query.or(`name.ilike.%${debouncedSearchTerm}%,description.ilike.%${debouncedSearchTerm}%`);
       }
 
-      query = query.order('name', { ascending: true })
+      // Apply sorting
+      query = query.order(sortColumn, { ascending: sortDirection === 'asc' })
                    .range(from, to);
 
       const { data, error, count } = await query;
@@ -69,12 +74,12 @@ const ProductsPage: React.FC = () => {
     } finally {
       setLoadingProducts(false);
     }
-  }, [company, debouncedSearchTerm, currentPage, itemsPerPage]);
+  }, [company, debouncedSearchTerm, currentPage, itemsPerPage, sortColumn, sortDirection]);
 
   useEffect(() => {
     if (!companySettingsLoading && company) {
-      // Reset page to 1 when search term changes
-      if (currentPage !== 1 && debouncedSearchTerm !== searchTerm) {
+      // Reset page to 1 when search term or sort changes
+      if (currentPage !== 1 && (debouncedSearchTerm !== searchTerm || sortColumn !== 'name' || sortDirection !== 'asc')) {
         setCurrentPage(1);
       } else {
         fetchProducts();
@@ -83,7 +88,7 @@ const ProductsPage: React.FC = () => {
       toast.error(companySettingsError);
       setLoadingProducts(false);
     }
-  }, [company, companySettingsLoading, companySettingsError, fetchProducts, debouncedSearchTerm, searchTerm, currentPage]);
+  }, [company, companySettingsLoading, companySettingsError, fetchProducts, debouncedSearchTerm, searchTerm, currentPage, sortColumn, sortDirection]);
 
   const handleSaveProduct = (newProduct: Tables<'products'>) => {
     fetchProducts();
@@ -112,6 +117,27 @@ const ProductsPage: React.FC = () => {
       toast.error(error.message || 'Failed to delete product.');
       setLoadingProducts(false);
     }
+  };
+
+  const handleSort = (column: keyof Tables<'products'>) => {
+    if (sortColumn === column) {
+      setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+    setCurrentPage(1); // Reset to first page on new sort
+  };
+
+  const renderSortIcon = (column: keyof Tables<'products'>) => {
+    if (sortColumn === column) {
+      return sortDirection === 'asc' ? (
+        <ArrowUpDown className="ml-2 h-4 w-4 rotate-180" />
+      ) : (
+        <ArrowUpDown className="ml-2 h-4 w-4" />
+      );
+    }
+    return <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />;
   };
 
   const totalPages = Math.ceil(totalCount / itemsPerPage);
@@ -180,10 +206,18 @@ const ProductsPage: React.FC = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
+                    <TableHead className="cursor-pointer hover:text-primary group" onClick={() => handleSort('name')}>
+                      <div className="flex items-center">
+                        Name {renderSortIcon('name')}
+                      </div>
+                    </TableHead>
                     <TableHead>Description</TableHead>
                     <TableHead>Unit</TableHead>
-                    <TableHead>Default Price</TableHead>
+                    <TableHead className="cursor-pointer hover:text-primary group" onClick={() => handleSort('default_price')}>
+                      <div className="flex items-center">
+                        Default Price {renderSortIcon('default_price')}
+                      </div>
+                    </TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, Edit, Eye, Search } from 'lucide-react';
+import { PlusCircle, Edit, Eye, Search, ArrowUpDown } from 'lucide-react'; // Added ArrowUpDown
 import { supabase } from '@/lib/supabase/client';
 import { Tables, Enums } from '@/types/supabase';
 import { toast } from 'react-hot-toast';
@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog';
 import useDebounce from '@/hooks/useDebounce';
-import PaginationControls from '@/components/PaginationControls'; // Import the new component
+import PaginationControls from '@/components/PaginationControls';
 
 // Extend Invoice type to include related client and invoice_items
 type InvoiceWithDetails = Tables<'invoices'> & {
@@ -46,6 +46,10 @@ const InvoicesPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [totalCount, setTotalCount] = useState(0);
+
+  // State for sorting
+  const [sortColumn, setSortColumn] = useState<keyof Tables<'invoices'> | 'client_name'>('issue_date');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   const invoiceStatuses: (Enums<'invoice_status'> | 'all')[] = ['all', 'draft', 'sent', 'paid', 'overdue', 'void'];
 
@@ -75,8 +79,14 @@ const InvoicesPage: React.FC = () => {
         query = query.eq('status', filterStatus);
       }
 
-      query = query.order('issue_date', { ascending: false })
-                   .range(from, to);
+      // Apply sorting
+      if (sortColumn === 'client_name') {
+        query = query.order('name', { foreignTable: 'clients', ascending: sortDirection === 'asc' });
+      } else {
+        query = query.order(sortColumn, { ascending: sortDirection === 'asc' });
+      }
+      
+      query = query.range(from, to);
 
       const { data, error, count } = await query;
 
@@ -89,14 +99,14 @@ const InvoicesPage: React.FC = () => {
     } finally {
       setLoadingInvoices(false);
     }
-  }, [company, debouncedSearchTerm, filterStatus, currentPage, itemsPerPage]);
+  }, [company, debouncedSearchTerm, filterStatus, currentPage, itemsPerPage, sortColumn, sortDirection]);
 
   useEffect(() => {
     if (!authLoading && !user) {
       navigate('/auth');
     } else if (!companySettingsLoading && company) {
-      // Reset page to 1 when search term or filter status changes
-      if (currentPage !== 1 && (debouncedSearchTerm !== searchTerm || filterStatus !== 'all')) {
+      // Reset page to 1 when search term, filter status, or sort changes
+      if (currentPage !== 1 && (debouncedSearchTerm !== searchTerm || filterStatus !== 'all' || sortColumn !== 'issue_date' || sortDirection !== 'desc')) {
         setCurrentPage(1);
       } else {
         fetchInvoices();
@@ -105,7 +115,7 @@ const InvoicesPage: React.FC = () => {
       toast.error(companySettingsError);
       setLoadingInvoices(false);
     }
-  }, [user, authLoading, company, companySettingsLoading, companySettingsError, navigate, fetchInvoices, debouncedSearchTerm, searchTerm, filterStatus, currentPage]);
+  }, [user, authLoading, company, companySettingsLoading, companySettingsError, navigate, fetchInvoices, debouncedSearchTerm, searchTerm, filterStatus, currentPage, sortColumn, sortDirection]);
 
   const handleSaveInvoice = (newInvoice: InvoiceWithDetails) => {
     fetchInvoices();
@@ -138,6 +148,27 @@ const InvoicesPage: React.FC = () => {
 
   const handleViewInvoice = (invoiceId: string) => {
     navigate(`/invoices/${invoiceId}`);
+  };
+
+  const handleSort = (column: keyof Tables<'invoices'> | 'client_name') => {
+    if (sortColumn === column) {
+      setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortColumn(column);
+      setSortDirection(column === 'issue_date' ? 'desc' : 'asc'); // Default desc for dates, asc for others
+    }
+    setCurrentPage(1); // Reset to first page on new sort
+  };
+
+  const renderSortIcon = (column: keyof Tables<'invoices'> | 'client_name') => {
+    if (sortColumn === column) {
+      return sortDirection === 'asc' ? (
+        <ArrowUpDown className="ml-2 h-4 w-4 rotate-180" />
+      ) : (
+        <ArrowUpDown className="ml-2 h-4 w-4" />
+      );
+    }
+    return <ArrowUpDown className="ml-2 h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />;
   };
 
   const totalPages = Math.ceil(totalCount / itemsPerPage);
@@ -220,11 +251,31 @@ const InvoicesPage: React.FC = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Number</TableHead>
-                    <TableHead>Client</TableHead>
-                    <TableHead>Issue Date</TableHead>
-                    <TableHead>Due Date</TableHead>
-                    <TableHead>Total</TableHead>
+                    <TableHead className="cursor-pointer hover:text-primary group" onClick={() => handleSort('number')}>
+                      <div className="flex items-center">
+                        Number {renderSortIcon('number')}
+                      </div>
+                    </TableHead>
+                    <TableHead className="cursor-pointer hover:text-primary group" onClick={() => handleSort('client_name')}>
+                      <div className="flex items-center">
+                        Client {renderSortIcon('client_name')}
+                      </div>
+                    </TableHead>
+                    <TableHead className="cursor-pointer hover:text-primary group" onClick={() => handleSort('issue_date')}>
+                      <div className="flex items-center">
+                        Issue Date {renderSortIcon('issue_date')}
+                      </div>
+                    </TableHead>
+                    <TableHead className="cursor-pointer hover:text-primary group" onClick={() => handleSort('due_date')}>
+                      <div className="flex items-center">
+                        Due Date {renderSortIcon('due_date')}
+                      </div>
+                    </TableHead>
+                    <TableHead className="cursor-pointer hover:text-primary group" onClick={() => handleSort('total')}>
+                      <div className="flex items-center">
+                        Total {renderSortIcon('total')}
+                      </div>
+                    </TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>

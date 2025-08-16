@@ -11,6 +11,7 @@ import { formatCurrency, fromSmallestUnit } from '@/lib/utils';
 import Decimal from 'decimal.js';
 import { subDays } from 'date-fns';
 import useCompany from '@/hooks/useCompany'; // Import the new hook
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'; // Import Table components
 
 // Extend Invoice type to include related client and invoice_items for calculations
 type InvoiceWithDetails = Tables<'invoices'> & {
@@ -40,8 +41,11 @@ const ReportsPage: React.FC = () => {
     bestSellingProductName: 'N/A',
     bestSellingProductRevenue: new Decimal(0),
     totalProductRevenue: new Decimal(0),
+    detailedClientRevenue: [] as { name: string; revenue: Decimal }[], // New state for detailed client revenue
+    detailedProductRevenue: [] as { name: string; revenue: Decimal }[], // New state for detailed product revenue
   });
   const [displayCurrency, setDisplayCurrency] = useState('PKR'); // State to hold the actual currency
+  const [error, setError] = useState<string | null>(null); // State to hold error messages
 
   const fetchReportData = useCallback(async () => {
     if (!company?.id) {
@@ -129,11 +133,18 @@ const ReportsPage: React.FC = () => {
 
       let topClientName = 'N/A';
       let topClientRevenue = new Decimal(0);
+      const detailedClientRevenue: { name: string; revenue: Decimal }[] = [];
+
       if (clientRevenueMap.size > 0) {
         const sortedClients = Array.from(clientRevenueMap.entries()).sort((a, b) => b[1].minus(a[1]).toNumber());
         const topClientId = sortedClients[0][0];
         topClientRevenue = sortedClients[0][1];
         topClientName = clientsData.find(c => c.id === topClientId)?.name || 'Unknown Client';
+
+        sortedClients.forEach(([clientId, revenue]) => {
+          const clientName = clientsData.find(c => c.id === clientId)?.name || 'Unknown Client';
+          detailedClientRevenue.push({ name: clientName, revenue });
+        });
       }
 
       // --- Calculate Product Performance ---
@@ -141,6 +152,7 @@ const ReportsPage: React.FC = () => {
       let bestSellingProductName = 'N/A';
       let bestSellingProductRevenue = new Decimal(0);
       let totalProductRevenue = new Decimal(0); // Sum of all product revenues
+      const detailedProductRevenue: { name: string; revenue: Decimal }[] = [];
 
       if (productRevenueMap.size > 0) {
         const sortedProducts = Array.from(productRevenueMap.entries()).sort((a, b) => b[1].minus(a[1]).toNumber());
@@ -149,6 +161,11 @@ const ReportsPage: React.FC = () => {
         bestSellingProductName = productsData.find(p => p.id === bestSellingProductId)?.name || 'Unknown Product';
 
         totalProductRevenue = Array.from(productRevenueMap.values()).reduce((sum, current) => sum.plus(current), new Decimal(0));
+
+        sortedProducts.forEach(([productId, revenue]) => {
+          const productName = productsData.find(p => p.id === productId)?.name || 'Unknown Product';
+          detailedProductRevenue.push({ name: productName, revenue });
+        });
       }
 
 
@@ -170,6 +187,8 @@ const ReportsPage: React.FC = () => {
         bestSellingProductName,
         bestSellingProductRevenue,
         totalProductRevenue,
+        detailedClientRevenue,
+        detailedProductRevenue,
       });
 
     } catch (error: any) {
@@ -215,7 +234,7 @@ const ReportsPage: React.FC = () => {
         Gain insights into your business with detailed reports.
       </p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         <Card>
           <CardHeader>
             <CardTitle>Invoice Summary</CardTitle>
@@ -266,6 +285,66 @@ const ReportsPage: React.FC = () => {
               <Separator className="my-2" />
               <p>Total Product Revenue: <span className="font-semibold">{formatCurrency(reportData.totalProductRevenue, displayCurrency)}</span></p>
             </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Top Clients by Revenue</CardTitle>
+            <CardDescription>Clients generating the most revenue.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {reportData.detailedClientRevenue.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4">No client revenue data available.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Client Name</TableHead>
+                    <TableHead className="text-right">Total Revenue</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {reportData.detailedClientRevenue.map((client, index) => (
+                    <TableRow key={index}>
+                      <TableCell className="font-medium">{client.name}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(client.revenue, displayCurrency)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Best Selling Products</CardTitle>
+            <CardDescription>Products or services generating the most revenue.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {reportData.detailedProductRevenue.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4">No product revenue data available.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Product Name</TableHead>
+                    <TableHead className="text-right">Total Revenue</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {reportData.detailedProductRevenue.map((product, index) => (
+                    <TableRow key={index}>
+                      <TableCell className="font-medium">{product.name}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(product.revenue, displayCurrency)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -23,7 +23,7 @@ interface PaymentFormProps {
   onSave: (payment: Tables<'payments'>) => void;
   invoiceId: string;
   invoiceCurrency: string;
-  invoiceAmountDue: number;
+  invoiceAmountDue: number; // This is the amount due at the time the form is opened
 }
 
 const PaymentForm: React.FC<PaymentFormProps> = ({
@@ -62,42 +62,61 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
       toast.error('Please select a payment method.');
       return;
     }
-    if (new Decimal(amount).lessThanOrEqualTo(0)) {
+    const paymentAmountInSmallestUnit = toSmallestUnit(amount);
+    if (new Decimal(paymentAmountInSmallestUnit).lessThanOrEqualTo(0)) {
       toast.error('Payment amount must be greater than zero.');
       return;
     }
 
     setLoading(true);
     try {
+      // First, record the payment
       const paymentData: TablesInsert<'payments'> = {
         invoice_id: invoiceId,
         date: paymentDate.toISOString().split('T')[0],
         method,
-        amount: toSmallestUnit(amount),
+        amount: paymentAmountInSmallestUnit,
         notes: notes || null,
       };
 
-      const { data, error } = await supabase
+      const { data: newPayment, error: paymentError } = await supabase
         .from('payments')
         .insert(paymentData)
         .select()
         .single();
 
-      if (error) throw error;
+      if (paymentError) throw paymentError;
 
-      // Update the invoice's amount_paid and amount_due
+      // Now, fetch the current state of the invoice to update its totals
+      const { data: currentInvoice, error: fetchInvoiceError } = await supabase
+        .from('invoices')
+        .select('total, amount_paid, due_date')
+        .eq('id', invoiceId)
+        .single();
+
+      if (fetchInvoiceError || !currentInvoice) {
+        throw new Error('Could not fetch current invoice details to update totals.');
+      }
+
+      const newTotalPaid = new Decimal(currentInvoice.amount_paid).plus(new Decimal(paymentAmountInSmallestUnit));
+      const newAmountDue = new Decimal(currentInvoice.total).minus(newTotalPaid);
+
+      let newStatus: Tables<'invoices'>['status'] = 'sent'; // Default to sent
+
+      if (newAmountDue.lessThanOrEqualTo(0)) {
+        newStatus = 'paid';
+      } else if (new Date(currentInvoice.due_date) < new Date()) {
+        newStatus = 'overdue';
+      } else {
+        newStatus = 'sent'; // Or whatever the current status was if not paid/overdue
+      }
+
       const { data: updatedInvoice, error: invoiceUpdateError } = await supabase
         .from('invoices')
         .update({
-          amount_paid: new Decimal(invoiceAmountDue).minus(new Decimal(toSmallestUnit(amount))).isNegative()
-            ? new Decimal(invoiceAmountDue).plus(new Decimal(toSmallestUnit(amount))).toNumber() // If overpaid, add to current paid
-            : new Decimal(invoiceAmountDue).minus(new Decimal(toSmallestUnit(amount))).toNumber(), // Otherwise, subtract from due
-          amount_due: new Decimal(invoiceAmountDue).minus(new Decimal(toSmallestUnit(amount))).isNegative()
-            ? 0 // If overpaid, amount due becomes 0
-            : new Decimal(invoiceAmountDue).minus(new Decimal(toSmallestUnit(amount))).toNumber(),
-          status: new Decimal(invoiceAmountDue).minus(new Decimal(toSmallestUnit(amount))).isZero() || new Decimal(invoiceAmountDue).minus(new Decimal(toSmallestUnit(amount))).isNegative()
-            ? 'paid'
-            : 'sent', // Or 'overdue' if due date passed
+          amount_paid: newTotalPaid.toNumber(),
+          amount_due: newAmountDue.toNumber(),
+          status: newStatus,
         })
         .eq('id', invoiceId)
         .select()
@@ -110,7 +129,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
         toast.success('Payment recorded successfully!');
       }
 
-      onSave(data); // Pass the new payment data back to the parent
+      onSave(newPayment); // Pass the new payment data back to the parent
       onClose();
     } catch (error: any) {
       console.error('Error recording payment:', error);

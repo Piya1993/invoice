@@ -4,21 +4,25 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, Edit, Trash2 } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Search } from 'lucide-react'; // Import Search icon
 import { supabase } from '@/lib/supabase/client';
 import { Tables } from '@/types/supabase';
 import { toast } from 'react-hot-toast';
 import ClientForm from '@/components/ClientForm';
 import { useAuth } from '@/context/AuthContext';
-import useCompany from '@/hooks/useCompany'; // Import the new hook
+import useCompany from '@/hooks/useCompany';
+import { Input } from '@/components/ui/input'; // Import Input for search
 
 const ClientsPage: React.FC = () => {
   const { user } = useAuth();
-  const { company, loading: companyLoading, error: companyError } = useCompany(); // Use the new hook
+  const { company, loading: companyLoading, error: companyError } = useCompany();
   const [clients, setClients] = useState<Tables<'clients'>[]>([]);
-  const [loadingClients, setLoadingClients] = useState(true); // Renamed to avoid conflict
+  const [loadingClients, setLoadingClients] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Tables<'clients'> | null>(null);
+
+  // State for search term
+  const [searchTerm, setSearchTerm] = useState('');
 
   const fetchClients = useCallback(async () => {
     if (!company?.id) {
@@ -28,11 +32,19 @@ const ClientsPage: React.FC = () => {
 
     setLoadingClients(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('clients')
         .select('*')
-        .eq('company_id', company.id)
-        .order('name', { ascending: true });
+        .eq('company_id', company.id);
+
+      // Apply search term
+      if (searchTerm) {
+        query = query.or(`name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`);
+      }
+
+      query = query.order('name', { ascending: true });
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setClients(data || []);
@@ -42,7 +54,7 @@ const ClientsPage: React.FC = () => {
     } finally {
       setLoadingClients(false);
     }
-  }, [company]);
+  }, [company, searchTerm]); // Add searchTerm to dependencies
 
   useEffect(() => {
     if (!companyLoading && company) {
@@ -97,7 +109,7 @@ const ClientsPage: React.FC = () => {
     );
   }
 
-  if (companyError || !company?.id) { // Ensure company.id is available before rendering ClientForm
+  if (companyError || !company?.id) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">
         <h2 className="text-xl font-semibold text-red-600 mb-4">Error: {companyError || 'Company not found.'}</h2>
@@ -115,6 +127,23 @@ const ClientsPage: React.FC = () => {
           <PlusCircle className="mr-2 h-4 w-4" /> Add New Client
         </Button>
       </div>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Search Clients</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name, email, or phone..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -162,7 +191,7 @@ const ClientsPage: React.FC = () => {
         onClose={() => setIsFormOpen(false)}
         onSave={handleSaveClient}
         initialData={editingClient}
-        companyId={company.id} // Pass company.id here
+        companyId={company.id}
       />
     </div>
   );

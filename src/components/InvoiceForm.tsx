@@ -42,8 +42,8 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
   const [dueDate, setDueDate] = useState<Date | undefined>(initialData?.due_date ? new Date(initialData.due_date) : new Date());
   const [status, setStatus] = useState<Enums<'invoice_status'>>(initialData?.status || 'draft');
   const [currency, setCurrency] = useState(initialData?.currency || 'PKR'); // Default currency
-  const [notes, setNotes] = useState(initialData?.notes || '');
-  const [terms, setTerms] = useState(initialData?.terms || '');
+  const [notes, setNotes] = useState('');
+  const [terms, setTerms] = useState('');
   const [invoiceItems, setInvoiceItems] = useState<FormInvoiceItem[]>([]);
 
   // Calculated totals (stored in smallest unit)
@@ -131,26 +131,29 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
         setStatus('draft');
         setNotes('');
         setTerms('');
-        setInvoiceItems([{
-          tempId: Date.now().toString(), // Unique ID for new items
-          title: '',
-          qty: 1,
-          unit_price: 0,
-          tax_rate: companySettings?.default_tax_rate || 0, // Set default tax rate for new item
-          discount: 0,
-          invoice_id: '', // Will be set on save
-          product_id: null,
-        }]);
+        // Initial item will be set once companySettings are loaded
+        setInvoiceItems([]);
       }
     }
-  }, [isOpen, initialData, fetchClientsProductsAndSettings, companySettings]);
+  }, [isOpen, initialData, fetchClientsProductsAndSettings]);
 
 
-  // Effect to set initial invoice number for new invoices
+  // Effect to set initial invoice number and first item for new invoices
   useEffect(() => {
     if (isOpen && !initialData && companySettings) {
       const nextNum = companySettings.next_number.toString().padStart(3, '0'); // e.g., 1 -> "001"
       setInvoiceNumber(`${companySettings.numbering_prefix}${nextNum}`);
+      // Add initial item with default tax rate
+      setInvoiceItems([{
+        tempId: Date.now().toString(), // Unique ID for new items
+        title: '',
+        qty: 1,
+        unit_price: 0,
+        tax_rate: companySettings.default_tax_rate || 0, // Set default tax rate for new item
+        discount: 0,
+        invoice_id: '', // Will be set on save
+        product_id: null,
+      }]);
     }
   }, [isOpen, initialData, companySettings]);
 
@@ -218,10 +221,9 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
               ...item,
               product_id: value,
               title: selectedProduct?.name || '',
-              qty: 1, // Reset quantity to 1 when product changes
               unit_price: selectedProduct?.default_price || 0,
-              tax_rate: companySettings?.default_tax_rate || 0, // Set default tax rate when product is selected
-              discount: 0, // Reset discount to 0 when product changes
+              // Do NOT reset qty, tax_rate, or discount when product changes
+              // These should be manually adjustable by the user
             };
           }
           if (field === 'qty' || field === 'tax_rate') {

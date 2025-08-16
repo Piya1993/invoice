@@ -7,74 +7,62 @@ import { supabase } from '@/lib/supabase/client';
 import { Tables } from '@/types/supabase';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
+import useCompany from '@/hooks/useCompany'; // Import the new hook
 
 const CompanySetupPage: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
+  const { company, loading: companyLoading, error: companyError } = useCompany(); // Use the new hook
   const navigate = useNavigate();
-  const [company, setCompany] = useState<Tables<'companies'> | null>(null);
   const [settings, setSettings] = useState<Tables<'settings'> | null>(null);
-  const [loadingData, setLoadingData] = useState(true); // Renamed to avoid conflict with authLoading
+  const [loadingSettings, setLoadingSettings] = useState(true); // New state for settings loading
 
-  const fetchCompanyAndSettings = useCallback(async () => {
-    if (!user?.id) {
-      setLoadingData(false);
+  const fetchSettingsForCompany = useCallback(async () => {
+    if (!company?.id) {
+      setLoadingSettings(false);
       return;
     }
-
-    setLoadingData(true);
+    setLoadingSettings(true);
     try {
-      const { data: companyData, error: companyError } = await supabase
-        .from('companies')
+      const { data: settingsData, error: settingsError } = await supabase
+        .from('settings')
         .select('*')
-        .eq('created_by', user.id)
+        .eq('company_id', company.id)
         .single();
 
-      if (companyError && companyError.code !== 'PGRST116') { // PGRST116 means no rows found
-        throw companyError;
+      if (settingsError && settingsError.code !== 'PGRST116') {
+        throw settingsError;
       }
-      setCompany(companyData); // companyData will be null if no company found
-
-      if (companyData) {
-        const { data: settingsData, error: settingsError } = await supabase
-          .from('settings')
-          .select('*')
-          .eq('company_id', companyData.id)
-          .single();
-
-        if (settingsError && settingsError.code !== 'PGRST116') {
-          throw settingsError;
-        }
-        setSettings(settingsData); // settingsData will be null if no settings found
-      } else {
-        setSettings(null); // Ensure settings is null if no company
-      }
-
+      setSettings(settingsData);
     } catch (error: any) {
-      console.error('Error fetching company/settings for setup:', error);
-      toast.error(error.message || 'Failed to load company setup data.');
-      // If there's a critical error fetching, we might still want to allow setup
-      // but for now, let's just log and proceed with null data.
+      console.error('Error fetching settings for company setup:', error);
+      toast.error(error.message || 'Failed to load settings for company setup.');
     } finally {
-      setLoadingData(false);
+      setLoadingSettings(false);
     }
-  }, [user]);
+  }, [company]);
 
   useEffect(() => {
-    if (!authLoading && user) {
-      fetchCompanyAndSettings();
-    } else if (!authLoading && !user) {
-      navigate('/auth'); // Redirect to auth if not logged in
+    if (!authLoading && !user) {
+      navigate('/auth');
+    } else if (!authLoading && user && !companyLoading) {
+      // If company is loaded (or determined not to exist)
+      if (company) {
+        fetchSettingsForCompany(); // Fetch settings if company exists
+      } else {
+        setLoadingSettings(false); // No company, so no settings to load
+      }
     }
-  }, [user, authLoading, fetchCompanyAndSettings, navigate]);
+  }, [user, authLoading, company, companyLoading, navigate, fetchSettingsForCompany]);
 
   const handleSave = (updatedCompany: Tables<'companies'>, updatedSettings: Tables<'settings'>) => {
-    setCompany(updatedCompany);
+    // After saving, the useCompany hook will re-fetch and update 'company' state globally.
+    // We just need to update local 'settings' state and navigate.
     setSettings(updatedSettings);
     toast.success('Company setup complete! Redirecting to dashboard.');
     navigate('/dashboard');
   };
 
-  if (authLoading || loadingData) {
+  if (authLoading || companyLoading || loadingSettings) { // Combine loading states
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <p>Loading setup...</p>
@@ -89,12 +77,12 @@ const CompanySetupPage: React.FC = () => {
   return (
     <div className="flex items-center justify-center min-h-screen bg-background p-4">
       <SettingsForm
-        isOpen={true} // Always open for this page
+        isOpen={true}
         onClose={() => { /* No direct close, handled by save/redirect */ }}
         onSave={handleSave}
-        initialCompanyData={company}
+        initialCompanyData={company} // Pass company from hook
         initialSettingsData={settings}
-        isInitialSetup={!company} // Pass true if no company exists yet
+        isInitialSetup={!company}
       />
     </div>
   );

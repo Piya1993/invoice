@@ -9,68 +9,71 @@ import { Tables } from '@/types/supabase';
 import { toast } from 'react-hot-toast';
 import SettingsForm from '@/components/SettingsForm';
 import { useAuth } from '@/context/AuthContext';
+import useCompany from '@/hooks/useCompany'; // Import the new hook
+import { useNavigate } from 'react-router-dom'; // Import useNavigate
 
 const SettingsPage: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
-  const [company, setCompany] = useState<Tables<'companies'> | null>(null);
+  const { company, loading: companyLoading, error: companyError } = useCompany(); // Use the new hook
+  const navigate = useNavigate();
   const [settings, setSettings] = useState<Tables<'settings'> | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingSettings, setLoadingSettings] = useState(true); // New state for settings loading
   const [isFormOpen, setIsFormOpen] = useState(false);
 
-  const fetchSettings = useCallback(async () => {
-    if (!user?.id) return;
-
-    setLoading(true);
+  const fetchSettingsForCompany = useCallback(async () => {
+    if (!company?.id) {
+      setLoadingSettings(false);
+      setSettings(null); // Ensure settings is null if no company
+      return;
+    }
+    setLoadingSettings(true);
     try {
-      // Fetch company data
-      const { data: companyData, error: companyError } = await supabase
-        .from('companies')
-        .select('*')
-        .eq('created_by', user.id)
-        .single();
-
-      if (companyError) throw companyError;
-      if (!companyData) {
-        throw new Error('No company found for this user.');
-      }
-      setCompany(companyData);
-
-      // Fetch settings data for the company
       const { data: settingsData, error: settingsError } = await supabase
         .from('settings')
         .select('*')
-        .eq('company_id', companyData.id)
+        .eq('company_id', company.id)
         .single();
 
-      if (settingsError && settingsError.code !== 'PGRST116') { // PGRST116 means no rows found
+      if (settingsError && settingsError.code !== 'PGRST116') {
         throw settingsError;
       }
-      setSettings(settingsData); // Will be null if no settings found
-
+      setSettings(settingsData);
     } catch (error: any) {
       console.error('Error fetching settings:', error);
       toast.error(error.message || 'Failed to fetch settings.');
+      setSettings(null);
     } finally {
-      setLoading(false);
+      setLoadingSettings(false);
     }
-  }, [user]);
+  }, [company]);
 
   useEffect(() => {
-    if (!authLoading && user) {
-      fetchSettings();
+    if (!authLoading && user && !companyLoading) {
+      fetchSettingsForCompany();
     }
-  }, [user, authLoading, fetchSettings]);
+  }, [user, authLoading, company, companyLoading, fetchSettingsForCompany]);
 
   const handleSaveSettings = (updatedCompany: Tables<'companies'>, updatedSettings: Tables<'settings'>) => {
-    setCompany(updatedCompany);
+    // The useCompany hook will re-fetch and update 'company' state globally.
+    // We just need to update local 'settings' state.
     setSettings(updatedSettings);
     setIsFormOpen(false);
   };
 
-  if (authLoading || loading) {
+  if (authLoading || companyLoading || loadingSettings) { // Combine loading states
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <p>Loading settings...</p>
+      </div>
+    );
+  }
+
+  if (companyError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">
+        <h2 className="text-xl font-semibold text-red-600 mb-4">Error: {companyError}</h2>
+        <p className="text-muted-foreground mb-4">Please ensure your company is set up correctly.</p>
+        <Button onClick={() => navigate('/setup-company')}>Go to Company Setup</Button>
       </div>
     );
   }

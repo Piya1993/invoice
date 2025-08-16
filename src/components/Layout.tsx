@@ -3,63 +3,50 @@
 import React, { ReactNode, useEffect, useState, useCallback } from 'react';
 import Sidebar from '@/components/Sidebar';
 import { useAuth } from '@/context/AuthContext';
-import { useNavigate, useLocation } from 'react-router-dom'; // Corrected import
+import { useNavigate, useLocation, Outlet } from 'react-router-dom'; // Corrected import
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'react-hot-toast';
+import useCompany from '@/hooks/useCompany'; // Import the new hook
 
 interface LayoutProps {
-  children: ReactNode;
+  // children: ReactNode; // No longer needed with Outlet
 }
 
-const Layout: React.FC<LayoutProps> = ({ children }) => {
+const Layout: React.FC<LayoutProps> = () => {
   const { user, loading: authLoading } = useAuth();
+  const { company, loading: companyLoading, error: companyError } = useCompany(); // Use the new hook
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [companySetupChecked, setCompanySetupChecked] = useState(false);
+  useEffect(() => {
+    if (authLoading || companyLoading) {
+      // Still loading authentication or company data, do nothing yet
+      return;
+    }
 
-  const checkCompanySetup = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      // If not authenticated, redirect to auth page
+      navigate('/auth');
+      return;
+    }
 
-    try {
-      const { data: companies, error } = await supabase
-        .from('companies')
-        .select('name')
-        .eq('created_by', user.id)
-        .limit(1);
-
-      if (error) throw error;
-
-      const companyName = companies?.[0]?.name;
-      const defaultCompanyNamePattern = new RegExp(`^${user.email?.split('@')[0]}'s Company$`);
-
-      // If company name is default or empty, and not already on setup page, redirect
-      if ((!companyName || defaultCompanyNamePattern.test(companyName)) && location.pathname !== '/setup-company') {
+    // If user is authenticated
+    if (!company) {
+      // If no company is found for the user
+      if (location.pathname !== '/setup-company') {
+        // If not already on the setup page, redirect to setup
         navigate('/setup-company');
-      } else if (companyName && !defaultCompanyNamePattern.test(companyName) && location.pathname === '/setup-company') {
-        // If company setup is complete and user is on setup page, redirect to dashboard
+      }
+    } else {
+      // If a company is found for the user
+      if (location.pathname === '/setup-company') {
+        // If on the setup page but company is already set up, redirect to dashboard
         navigate('/dashboard');
       }
-    } catch (error: any) {
-      console.error('Error checking company setup in Layout:', error);
-      toast.error('Failed to verify company setup.');
-      navigate('/auth'); // Critical error, redirect to auth
-    } finally {
-      setCompanySetupChecked(true);
     }
-  }, [user, navigate, location.pathname]);
+  }, [user, authLoading, company, companyLoading, navigate, location.pathname]);
 
-  useEffect(() => {
-    if (!authLoading) {
-      if (!user) {
-        navigate('/auth'); // Redirect to auth if not logged in
-      } else if (!companySetupChecked) {
-        checkCompanySetup(); // Check company setup once user is loaded
-      }
-    }
-  }, [user, authLoading, navigate, companySetupChecked, checkCompanySetup]);
-
-  if (authLoading || !companySetupChecked) { // Wait for auth and company setup check
+  if (authLoading || companyLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <p>Loading application...</p>
@@ -71,13 +58,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     return null; // Redirect will happen in useEffect
   }
 
+  // If user is logged in and company status is determined, render layout
   return (
     <div className="flex h-screen bg-background text-foreground">
       <aside className="w-64 flex-shrink-0">
         <Sidebar />
       </aside>
       <main className="flex-1 overflow-y-auto p-6">
-        {children}
+        <Outlet /> {/* Renders the matched child route component */}
       </main>
     </div>
   );

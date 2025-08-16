@@ -7,15 +7,17 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'react-hot-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency, fromSmallestUnit } from '@/lib/utils';
 import Decimal from 'decimal.js';
-import { DollarSign, FileText, TrendingUp, Wallet } from 'lucide-react';
+import { DollarSign, FileText, TrendingUp, Wallet, Clock } from 'lucide-react';
 import { Tables } from '@/types/supabase';
+import { format } from 'date-fns';
+import { Link } from 'react-router-dom';
 
-// Extend Invoice type to include related client and invoice_items for calculations
-type InvoiceWithDetails = Tables<'invoices'> & {
+// Extend Invoice type to include related client for display
+type InvoiceWithClient = Tables<'invoices'> & {
   clients: Tables<'clients'>;
-  invoice_items: Tables<'invoice_items'>[];
 };
 
 const Dashboard: React.FC = () => {
@@ -28,6 +30,8 @@ const Dashboard: React.FC = () => {
     totalOutstanding: new Decimal(0),
     totalPaidAmount: new Decimal(0),
     currency: 'PKR', // Default currency, will be updated from company settings
+    recentInvoices: [] as InvoiceWithClient[],
+    overdueInvoices: [] as InvoiceWithClient[],
   });
 
   const fetchDashboardData = useCallback(async () => {
@@ -49,7 +53,7 @@ const Dashboard: React.FC = () => {
 
       const { data: invoicesData, error: invoicesError } = await supabase
         .from('invoices')
-        .select('*')
+        .select('*, clients(*)') // Fetch client details along with invoices
         .eq('company_id', companyId);
 
       if (invoicesError) throw invoicesError;
@@ -59,11 +63,24 @@ const Dashboard: React.FC = () => {
       let totalOutstanding = new Decimal(0);
       let totalPaidAmount = new Decimal(0);
 
+      const recentInvoices: InvoiceWithClient[] = [];
+      const overdueInvoices: InvoiceWithClient[] = [];
+      const today = new Date();
+
       invoicesData.forEach(invoice => {
         totalRevenue = totalRevenue.plus(fromSmallestUnit(invoice.total));
         totalOutstanding = totalOutstanding.plus(fromSmallestUnit(invoice.amount_due));
         totalPaidAmount = totalPaidAmount.plus(fromSmallestUnit(invoice.amount_paid));
+
+        // Check for overdue invoices
+        if (invoice.status !== 'paid' && new Date(invoice.due_date) < today) {
+          overdueInvoices.push(invoice);
+        }
       });
+
+      // Sort all invoices by issue_date descending to get recent ones
+      const sortedInvoices = invoicesData.sort((a, b) => new Date(b.issue_date).getTime() - new Date(a.issue_date).getTime());
+      recentInvoices.push(...sortedInvoices.slice(0, 5)); // Get top 5 recent invoices
 
       setDashboardData({
         totalInvoices,
@@ -71,6 +88,8 @@ const Dashboard: React.FC = () => {
         totalOutstanding,
         totalPaidAmount,
         currency: companyCurrency,
+        recentInvoices,
+        overdueInvoices,
       });
 
     } catch (error: any) {
@@ -168,10 +187,82 @@ const Dashboard: React.FC = () => {
         </Card>
       </div>
 
-      <div className="flex-1 flex items-center justify-center">
-        <p className="text-lg text-muted-foreground">
-          This is your central hub. Navigate using the sidebar to manage your invoices, clients, and products.
-        </p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <FileText className="mr-2 h-5 w-5" /> Recent Invoices
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {dashboardData.recentInvoices.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4">No recent invoices found.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Number</TableHead>
+                    <TableHead>Client</TableHead>
+                    <TableHead>Due Date</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {dashboardData.recentInvoices.map((invoice) => (
+                    <TableRow key={invoice.id}>
+                      <TableCell className="font-medium">
+                        <Link to={`/invoices/${invoice.id}`} className="hover:underline">
+                          {invoice.number || 'N/A'}
+                        </Link>
+                      </TableCell>
+                      <TableCell>{invoice.clients?.name || 'Unknown Client'}</TableCell>
+                      <TableCell>{format(new Date(invoice.due_date), 'PPP')}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(invoice.total, invoice.currency)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Clock className="mr-2 h-5 w-5 text-red-500" /> Overdue Invoices
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {dashboardData.overdueInvoices.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4">No overdue invoices!</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Number</TableHead>
+                    <TableHead>Client</TableHead>
+                    <TableHead>Due Date</TableHead>
+                    <TableHead className="text-right">Amount Due</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {dashboardData.overdueInvoices.map((invoice) => (
+                    <TableRow key={invoice.id} className="bg-red-50/50">
+                      <TableCell className="font-medium">
+                        <Link to={`/invoices/${invoice.id}`} className="hover:underline text-red-700">
+                          {invoice.number || 'N/A'}
+                        </Link>
+                      </TableCell>
+                      <TableCell>{invoice.clients?.name || 'Unknown Client'}</TableCell>
+                      <TableCell className="text-red-600">{format(new Date(invoice.due_date), 'PPP')}</TableCell>
+                      <TableCell className="text-right text-red-600 font-semibold">{formatCurrency(invoice.amount_due, invoice.currency)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

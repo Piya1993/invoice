@@ -12,24 +12,14 @@ import { toast } from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
 import { formatCurrency, fromSmallestUnit } from '@/lib/utils';
 import { format } from 'date-fns';
-import { ArrowLeft, Edit, Printer, DollarSign, CheckCircle, Trash2 } from 'lucide-react';
+import { ArrowLeft, Edit, Printer, DollarSign, CheckCircle } from 'lucide-react';
 import PaymentForm from '@/components/PaymentForm';
 import InvoiceForm from '@/components/InvoiceForm';
 import InvoicePdfGenerator from '@/components/InvoicePdfGenerator';
 import InvoiceDisplay from '@/components/InvoiceDisplay';
 import Decimal from 'decimal.js';
-import useCompanySettings from '@/hooks/useCompanySettings'; // Import the new hook
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import useCompanySettings from '@/hooks/useCompanySettings';
+import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog'; // Import the new component
 
 // Extend Invoice type to include related client and invoice_items
 type InvoiceWithDetails = Tables<'invoices'> & {
@@ -42,7 +32,7 @@ const InvoiceDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
-  const { company, settings, loading: companySettingsLoading, error: companySettingsError, refetch: refetchCompanySettings } = useCompanySettings(); // Use the new hook
+  const { company, settings, loading: companySettingsLoading, error: companySettingsError, refetch: refetchCompanySettings } = useCompanySettings();
   const [invoice, setInvoice] = useState<InvoiceWithDetails | null>(null);
   const [loadingInvoiceDetails, setLoadingInvoiceDetails] = useState(true);
   const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
@@ -58,18 +48,6 @@ const InvoiceDetailsPage: React.FC = () => {
 
     setLoadingInvoiceDetails(true);
     try {
-      // Settings are now fetched by useCompanySettings, no need to fetch here
-      // const { data: settingsData, error: settingsError } = await supabase
-      //   .from('settings')
-      //   .select('*')
-      //   .eq('company_id', company.id)
-      //   .single();
-
-      // if (settingsError && settingsError.code !== 'PGRST116') {
-      //   throw settingsError;
-      // }
-      // setSettings(settingsData); // This state is no longer needed if settings come from hook
-
       // Fetch invoice details
       const { data, error } = await supabase
         .from('invoices')
@@ -232,44 +210,22 @@ const InvoiceDetailsPage: React.FC = () => {
           <Button variant="secondary" onClick={handleRecordPayment} disabled={isPaid}>
             <DollarSign className="mr-2 h-4 w-4" /> Record Payment
           </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="success" disabled={isPaid}>
-                <CheckCircle className="mr-2 h-4 w-4" /> Mark as Paid
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Mark Invoice as Paid?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This action will set the invoice status to 'Paid' and the amount due to zero. Are you sure you want to proceed?
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleMarkAsPaid}>Mark as Paid</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" disabled={loadingInvoiceDetails}>
-                <Trash2 className="mr-2 h-4 w-4" /> Delete Invoice
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This action cannot be undone. This will permanently delete this invoice and all associated payments and items from your account.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDeleteInvoice}>Continue</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          <ConfirmDeleteDialog
+            onConfirm={handleMarkAsPaid}
+            title="Mark Invoice as Paid?"
+            description="This action will set the invoice status to 'Paid' and the amount due to zero. Are you sure you want to proceed?"
+            buttonText="Mark as Paid"
+            buttonVariant="success"
+            buttonIcon={<CheckCircle className="mr-2 h-4 w-4" />}
+            disabled={isPaid}
+          />
+          <ConfirmDeleteDialog
+            onConfirm={handleDeleteInvoice}
+            description="This action cannot be undone. This will permanently delete this invoice and all associated payments and items from your account."
+            buttonText="Delete Invoice"
+            buttonVariant="destructive"
+            disabled={loadingInvoiceDetails}
+          />
         </div>
       </div>
 

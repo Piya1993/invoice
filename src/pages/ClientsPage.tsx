@@ -4,30 +4,20 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, Edit, Trash2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { PlusCircle, Edit, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Tables } from '@/types/supabase';
 import { toast } from 'react-hot-toast';
 import ClientForm from '@/components/ClientForm';
 import { useAuth } from '@/context/AuthContext';
-import useCompanySettings from '@/hooks/useCompanySettings'; // Import the new hook
+import useCompanySettings from '@/hooks/useCompanySettings';
 import { Input } from '@/components/ui/input';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog'; // Import the new component
 import useDebounce from '@/hooks/useDebounce';
 
 const ClientsPage: React.FC = () => {
   const { user } = useAuth();
-  const { company, loading: companySettingsLoading, error: companySettingsError } = useCompanySettings(); // Use the new hook
+  const { company, loading: companySettingsLoading, error: companySettingsError } = useCompanySettings();
   const [clients, setClients] = useState<Tables<'clients'>[]>([]);
   const [loadingClients, setLoadingClients] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -206,25 +196,10 @@ const ClientsPage: React.FC = () => {
                         <Button variant="ghost" size="sm" onClick={() => handleEditClient(client)}>
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <Trash2 className="h-4 w-4 text-red-500" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                This action cannot be undone. This will permanently delete the client.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDeleteClient(client.id)}>Continue</AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        <ConfirmDeleteDialog
+                          onConfirm={() => handleDeleteClient(client.id)}
+                          description="This action cannot be undone. This will permanently delete the client."
+                        />
                       </TableCell>
                     </TableRow>
                   ))}

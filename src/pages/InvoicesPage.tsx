@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, Edit, Trash2, Eye, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { PlusCircle, Edit, Eye, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Tables, Enums } from '@/types/supabase';
 import { toast } from 'react-hot-toast';
@@ -13,20 +13,10 @@ import { useAuth } from '@/context/AuthContext';
 import { formatCurrency } from '@/lib/utils';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
-import useCompanySettings from '@/hooks/useCompanySettings'; // Import the new hook
+import useCompanySettings from '@/hooks/useCompanySettings';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog'; // Import the new component
 import useDebounce from '@/hooks/useDebounce';
 
 // Extend Invoice type to include related client and invoice_items
@@ -37,7 +27,7 @@ type InvoiceWithDetails = Tables<'invoices'> & {
 
 const InvoicesPage: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
-  const { company, loading: companySettingsLoading, error: companySettingsError } = useCompanySettings(); // Use the new hook
+  const { company, loading: companySettingsLoading, error: companySettingsError } = useCompanySettings();
   const navigate = useNavigate();
   const [invoices, setInvoices] = useState<InvoiceWithDetails[]>([]);
   const [loadingInvoices, setLoadingInvoices] = useState(true);
@@ -263,25 +253,10 @@ const InvoicesPage: React.FC = () => {
                         <Button variant="ghost" size="sm" onClick={() => handleEditInvoice(invoice)}>
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <Trash2 className="h-4 w-4 text-red-500" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                This action cannot be undone. This will permanently delete this invoice and all associated payments and items.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDeleteInvoice(invoice.id)}>Continue</AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        <ConfirmDeleteDialog
+                          onConfirm={() => handleDeleteInvoice(invoice.id)}
+                          description="This action cannot be undone. This will permanently delete this invoice and all associated payments and items."
+                        />
                       </TableCell>
                     </TableRow>
                   ))}

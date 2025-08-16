@@ -5,7 +5,13 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from '@/context/AuthContext';
 import AuthPage from '@/pages/AuthPage';
 import Dashboard from '@/pages/Dashboard';
-import Index from '@/pages/Index'; // Assuming this is your default landing page
+import Index from '@/pages/Index';
+import InvoicesPage from '@/pages/InvoicesPage';
+import ClientsPage from '@/pages/ClientsPage';
+import ProductsPage from '@/pages/ProductsPage';
+import ReportsPage from '@/pages/ReportsPage';
+import SettingsPage from '@/pages/SettingsPage';
+import Layout from '@/components/Layout';
 import { Toaster } from 'react-hot-toast';
 
 function App() {
@@ -16,7 +22,15 @@ function App() {
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<AuthPage />} />
-          <Route path="/dashboard" element={<Dashboard />} />
+          {/* Protected routes using the Layout component */}
+          <Route element={<Layout />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/invoices" element={<InvoicesPage />} />
+            <Route path="/clients" element={<ClientsPage />} />
+            <Route path="/products" element={<ProductsPage />} />
+            <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+          </Route>
           {/* Add other routes here as we build them */}
         </Routes>
       </AuthProvider>

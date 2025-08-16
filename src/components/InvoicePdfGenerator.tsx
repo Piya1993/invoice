@@ -8,6 +8,7 @@ import { Tables } from '@/types/supabase';
 import { formatCurrency, fromSmallestUnit } from '@/lib/utils';
 import { format } from 'date-fns';
 import { toast } from 'react-hot-toast';
+import { Printer } from 'lucide-react';
 
 // Extend Invoice type to include related client and invoice_items
 type InvoiceWithDetails = Tables<'invoices'> & {
@@ -17,9 +18,11 @@ type InvoiceWithDetails = Tables<'invoices'> & {
 
 interface InvoicePdfGeneratorProps {
   invoice: InvoiceWithDetails;
+  company: Tables<'companies'>;
+  settings: Tables<'settings'> | null;
 }
 
-const InvoicePdfGenerator: React.FC<InvoicePdfGeneratorProps> = ({ invoice }) => {
+const InvoicePdfGenerator: React.FC<InvoicePdfGeneratorProps> = ({ invoice, company, settings }) => {
   const invoiceRef = useRef<HTMLDivElement>(null);
 
   const generatePdf = async () => {
@@ -78,11 +81,13 @@ const InvoicePdfGenerator: React.FC<InvoicePdfGeneratorProps> = ({ invoice }) =>
             <p className="text-sm">Due Date: {format(new Date(invoice.due_date), 'PPP')}</p>
           </div>
           <div className="text-right">
-            {/* You might want to fetch and display your company's logo and details here */}
-            <h2 className="text-xl font-semibold">{invoice.clients?.companies?.name || 'Your Company Name'}</h2>
-            <p className="text-sm">{invoice.clients?.companies?.address || 'Your Company Address'}</p>
-            <p className="text-sm">{invoice.clients?.companies?.phone || 'Your Company Phone'}</p>
-            <p className="text-sm">{invoice.clients?.companies?.email || 'Your Company Email'}</p>
+            {company.logo_url && (
+              <img src={company.logo_url} alt="Company Logo" className="h-16 mb-2 ml-auto" />
+            )}
+            <h2 className="text-xl font-semibold">{company.name}</h2>
+            <p className="text-sm">{company.address || ''}</p>
+            <p className="text-sm">{company.phone || ''}</p>
+            <p className="text-sm">{user?.email || ''}</p> {/* Assuming company email is user's email for now */}
           </div>
         </div>
 

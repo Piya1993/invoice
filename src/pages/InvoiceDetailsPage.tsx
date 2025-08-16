@@ -29,6 +29,8 @@ const InvoiceDetailsPage: React.FC = () => {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const [invoice, setInvoice] = useState<InvoiceWithDetails | null>(null);
+  const [company, setCompany] = useState<Tables<'companies'> | null>(null);
+  const [settings, setSettings] = useState<Tables<'settings'> | null>(null);
   const [loading, setLoading] = useState(true);
   const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
   const [isEditFormOpen, setIsEditFormOpen] = useState(false);
@@ -38,16 +40,31 @@ const InvoiceDetailsPage: React.FC = () => {
 
     setLoading(true);
     try {
+      // Fetch company data
       const { data: companyData, error: companyError } = await supabase
         .from('companies')
-        .select('id')
+        .select('*')
         .eq('created_by', user.id)
         .single();
 
       if (companyError || !companyData) {
         throw new Error('Could not find company for the current user. Please ensure your company is set up.');
       }
+      setCompany(companyData);
 
+      // Fetch settings data for the company
+      const { data: settingsData, error: settingsError } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('company_id', companyData.id)
+        .single();
+
+      if (settingsError && settingsError.code !== 'PGRST116') { // PGRST116 means no rows found
+        throw settingsError;
+      }
+      setSettings(settingsData); // Will be null if no settings found
+
+      // Fetch invoice details
       const { data, error } = await supabase
         .from('invoices')
         .select('*, clients(*), invoice_items(*), payments(*)')
@@ -116,7 +133,7 @@ const InvoiceDetailsPage: React.FC = () => {
         <h1 className="text-3xl font-bold">Invoice #{invoice.number || invoice.id.substring(0, 8)}</h1>
         <div className="space-x-2">
           {/* Use InvoicePdfGenerator component here */}
-          <InvoicePdfGenerator invoice={invoice} />
+          {company && settings && <InvoicePdfGenerator invoice={invoice} company={company} settings={settings} />}
           <Button onClick={handleEditInvoice}>
             <Edit className="mr-2 h-4 w-4" /> Edit Invoice
           </Button>

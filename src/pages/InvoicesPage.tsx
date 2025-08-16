@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, Edit, Trash2, Eye, Search } from 'lucide-react'; // Import Search icon
+import { PlusCircle, Edit, Trash2, Eye, Search, ChevronLeft, ChevronRight } from 'lucide-react'; // Import pagination icons
 import { supabase } from '@/lib/supabase/client';
 import { Tables, Enums } from '@/types/supabase'; // Import Enums for invoice_status
 import { toast } from 'react-hot-toast';
@@ -36,6 +36,11 @@ const InvoicesPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<Enums<'invoice_status'> | 'all'>('all');
 
+  // State for pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10); // You can make this configurable
+  const [totalCount, setTotalCount] = useState(0);
+
   const invoiceStatuses: (Enums<'invoice_status'> | 'all')[] = ['all', 'draft', 'sent', 'paid', 'overdue', 'void'];
 
   const fetchInvoices = useCallback(async () => {
@@ -46,9 +51,12 @@ const InvoicesPage: React.FC = () => {
 
     setLoadingInvoices(true);
     try {
+      const from = (currentPage - 1) * itemsPerPage;
+      const to = from + itemsPerPage - 1;
+
       let query = supabase
         .from('invoices')
-        .select('*, clients(*), invoice_items(*)')
+        .select('*, clients(*), invoice_items(*)', { count: 'exact' }) // Request exact count
         .eq('company_id', company.id);
 
       // Apply search term
@@ -61,19 +69,21 @@ const InvoicesPage: React.FC = () => {
         query = query.eq('status', filterStatus);
       }
 
-      query = query.order('issue_date', { ascending: false });
+      query = query.order('issue_date', { ascending: false })
+                   .range(from, to); // Apply pagination range
 
-      const { data, error } = await query;
+      const { data, error, count } = await query;
 
       if (error) throw error;
       setInvoices(data || []);
+      setTotalCount(count || 0); // Set the total count
     } catch (error: any) {
       console.error('Error fetching invoices:', error);
       toast.error(error.message || 'Failed to fetch invoices.');
     } finally {
       setLoadingInvoices(false);
     }
-  }, [company, searchTerm, filterStatus]); // Add searchTerm and filterStatus to dependencies
+  }, [company, searchTerm, filterStatus, currentPage, itemsPerPage]); // Add pagination dependencies
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -87,11 +97,8 @@ const InvoicesPage: React.FC = () => {
   }, [user, authLoading, company, companyLoading, companyError, navigate, fetchInvoices]);
 
   const handleSaveInvoice = (newInvoice: InvoiceWithDetails) => {
-    if (editingInvoice) {
-      setInvoices(invoices.map((invoice) => (invoice.id === newInvoice.id ? newInvoice : invoice)));
-    } else {
-      setInvoices([newInvoice, ...invoices]); // Add new invoice to the top
-    }
+    // After saving, re-fetch to ensure pagination and filters are correctly applied
+    fetchInvoices();
     setEditingInvoice(null);
     setIsFormOpen(false);
   };
@@ -104,9 +111,8 @@ const InvoicesPage: React.FC = () => {
   const handleDeleteInvoice = async (invoiceId: string) => {
     if (!window.confirm('Are you sure you want to delete this invoice? This will also delete all associated items and payments.')) return;
 
-    const originalInvoices = [...invoices];
-    setInvoices(invoices.filter((invoice) => invoice.id !== invoiceId)); // Optimistic UI
-
+    // Optimistic UI update is tricky with pagination, so we'll just re-fetch
+    setLoadingInvoices(true); // Show loading while deleting
     try {
       const { error } = await supabase
         .from('invoices')
@@ -115,15 +121,26 @@ const InvoicesPage: React.FC = () => {
 
       if (error) throw error;
       toast.success('Invoice deleted successfully!');
+      fetchInvoices(); // Re-fetch after deletion
     } catch (error: any) {
       console.error('Error deleting invoice:', error);
       toast.error(error.message || 'Failed to delete invoice.');
-      setInvoices(originalInvoices); // Revert on error
+      setLoadingInvoices(false); // Hide loading on error
     }
   };
 
   const handleViewInvoice = (invoiceId: string) => {
     navigate(`/invoices/${invoiceId}`);
+  };
+
+  const totalPages = Math.ceil(totalCount / itemsPerPage);
+
+  const handlePreviousPage = () => {
+    setCurrentPage(prev => Math.max(1, prev - 1));
+  };
+
+  const handleNextPage = () => {
+    setCurrentPage(prev => Math.min(totalPages, prev + 1));
   };
 
   if (authLoading || companyLoading || loadingInvoices) {
@@ -164,11 +181,11 @@ const InvoicesPage: React.FC = () => {
               <Input
                 placeholder="Search by invoice number or client name..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => setCurrentPage(1) || setSearchTerm(e.target.value)} // Reset page on search
                 className="pl-9"
               />
             </div>
-            <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as Enums<'invoice_status'> | 'all')}>
+            <Select value={filterStatus} onValueChange={(value) => setCurrentPage(1) || setFilterStatus(value as Enums<'invoice_status'> | 'all')}> {/* Reset page on filter */}
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
@@ -192,51 +209,74 @@ const InvoicesPage: React.FC = () => {
           {invoices.length === 0 ? (
             <p className="text-muted-foreground text-center py-8">No invoices found. Create your first invoice!</p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Number</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Issue Date</TableHead>
-                  <TableHead>Due Date</TableHead>
-                  <TableHead>Total</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {invoices.map((invoice) => (
-                  <TableRow key={invoice.id}>
-                    <TableCell className="font-medium">{invoice.number || 'N/A'}</TableCell>
-                    <TableCell>{invoice.clients?.name || 'Unknown Client'}</TableCell>
-                    <TableCell>{format(new Date(invoice.issue_date), 'PPP')}</TableCell>
-                    <TableCell>{format(new Date(invoice.due_date), 'PPP')}</TableCell>
-                    <TableCell>{formatCurrency(invoice.total, invoice.currency)}</TableCell>
-                    <TableCell>
-                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                        invoice.status === 'paid' ? 'bg-green-100 text-green-800' :
-                        invoice.status === 'overdue' ? 'bg-red-100 text-red-800' :
-                        invoice.status === 'sent' ? 'bg-blue-100 text-blue-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" onClick={() => handleViewInvoice(invoice.id)}>
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleEditInvoice(invoice)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDeleteInvoice(invoice.id)}>
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </Button>
-                    </TableCell>
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Number</TableHead>
+                    <TableHead>Client</TableHead>
+                    <TableHead>Issue Date</TableHead>
+                    <TableHead>Due Date</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {invoices.map((invoice) => (
+                    <TableRow key={invoice.id}>
+                      <TableCell className="font-medium">{invoice.number || 'N/A'}</TableCell>
+                      <TableCell>{invoice.clients?.name || 'Unknown Client'}</TableCell>
+                      <TableCell>{format(new Date(invoice.issue_date), 'PPP')}</TableCell>
+                      <TableCell>{format(new Date(invoice.due_date), 'PPP')}</TableCell>
+                      <TableCell>{formatCurrency(invoice.total, invoice.currency)}</TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                          invoice.status === 'paid' ? 'bg-green-100 text-green-800' :
+                          invoice.status === 'overdue' ? 'bg-red-100 text-red-800' :
+                          invoice.status === 'sent' ? 'bg-blue-100 text-blue-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="sm" onClick={() => handleViewInvoice(invoice.id)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleEditInvoice(invoice)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleDeleteInvoice(invoice.id)}>
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {totalPages > 1 && (
+                <div className="flex justify-between items-center mt-4">
+                  <Button
+                    variant="outline"
+                    onClick={handlePreviousPage}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-2" /> Previous
+                  </Button>
+                  <span className="text-sm text-muted-foreground">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    onClick={handleNextPage}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next <ChevronRight className="h-4 w-4 ml-2" />
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

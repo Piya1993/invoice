@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, Edit, Trash2 } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Search } from 'lucide-react'; // Import Search icon
 import { supabase } from '@/lib/supabase/client';
 import { Tables } from '@/types/supabase';
 import { toast } from 'react-hot-toast';
@@ -12,6 +12,7 @@ import ProductForm from '@/components/ProductForm';
 import { useAuth } from '@/context/AuthContext';
 import { formatCurrency } from '@/lib/utils';
 import useCompany from '@/hooks/useCompany'; // Import the new hook
+import { Input } from '@/components/ui/input'; // Import Input for search
 
 const ProductsPage: React.FC = () => {
   const { user } = useAuth();
@@ -21,6 +22,9 @@ const ProductsPage: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Tables<'products'> | null>(null);
 
+  // State for search term
+  const [searchTerm, setSearchTerm] = useState('');
+
   const fetchProducts = useCallback(async () => {
     if (!company?.id) {
       setLoadingProducts(false);
@@ -29,11 +33,19 @@ const ProductsPage: React.FC = () => {
 
     setLoadingProducts(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('products')
         .select('*')
-        .eq('company_id', company.id)
-        .order('name', { ascending: true });
+        .eq('company_id', company.id);
+
+      // Apply search term
+      if (searchTerm) {
+        query = query.or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
+      }
+
+      query = query.order('name', { ascending: true });
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setProducts(data || []);
@@ -43,7 +55,7 @@ const ProductsPage: React.FC = () => {
     } finally {
       setLoadingProducts(false);
     }
-  }, [company]);
+  }, [company, searchTerm]); // Add searchTerm to dependencies
 
   useEffect(() => {
     if (!companyLoading && company) {
@@ -116,6 +128,23 @@ const ProductsPage: React.FC = () => {
           <PlusCircle className="mr-2 h-4 w-4" /> Add New Product
         </Button>
       </div>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Search Products</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name or description..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

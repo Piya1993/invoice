@@ -13,13 +13,14 @@ import { useAuth } from '@/context/AuthContext';
 import { formatCurrency, fromSmallestUnit } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ArrowLeft, Edit, Printer, DollarSign } from 'lucide-react';
-import PaymentForm from '@/components/PaymentForm'; // Import PaymentForm
+import PaymentForm from '@/components/PaymentForm';
+import InvoiceForm from '@/components/InvoiceForm'; // Import InvoiceForm
 
 // Extend Invoice type to include related client and invoice_items
 type InvoiceWithDetails = Tables<'invoices'> & {
   clients: Tables<'clients'>;
   invoice_items: Tables<'invoice_items'>[];
-  payments: Tables<'payments'>[]; // Add payments to the type
+  payments: Tables<'payments'>[];
 };
 
 const InvoiceDetailsPage: React.FC = () => {
@@ -28,7 +29,8 @@ const InvoiceDetailsPage: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
   const [invoice, setInvoice] = useState<InvoiceWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false); // State for payment form
+  const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
+  const [isEditFormOpen, setIsEditFormOpen] = useState(false); // State for edit form
 
   const fetchInvoiceDetails = useCallback(async () => {
     if (!user?.id || !id) return;
@@ -47,9 +49,9 @@ const InvoiceDetailsPage: React.FC = () => {
 
       const { data, error } = await supabase
         .from('invoices')
-        .select('*, clients(*), invoice_items(*), payments(*)') // Fetch payments as well
+        .select('*, clients(*), invoice_items(*), payments(*)')
         .eq('id', id)
-        .eq('company_id', companyData.id) // Ensure invoice belongs to user's company
+        .eq('company_id', companyData.id)
         .single();
 
       if (error) throw error;
@@ -62,7 +64,7 @@ const InvoiceDetailsPage: React.FC = () => {
     } catch (error: any) {
       console.error('Error fetching invoice details:', error);
       toast.error(error.message || 'Failed to fetch invoice details.');
-      router.push('/invoices'); // Redirect if error
+      router.push('/invoices');
     } finally {
       setLoading(false);
     }
@@ -79,9 +81,17 @@ const InvoiceDetailsPage: React.FC = () => {
   };
 
   const handleSavePayment = (newPayment: Tables<'payments'>) => {
-    // After a payment is saved, re-fetch invoice details to update totals and payment list
-    fetchInvoiceDetails();
+    fetchInvoiceDetails(); // Re-fetch invoice details to update totals and payment list
     setIsPaymentFormOpen(false);
+  };
+
+  const handleEditInvoice = () => {
+    setIsEditFormOpen(true);
+  };
+
+  const handleSaveInvoice = (updatedInvoice: InvoiceWithDetails) => {
+    fetchInvoiceDetails(); // Re-fetch invoice details to update all fields
+    setIsEditFormOpen(false);
   };
 
   if (authLoading || loading) {
@@ -107,7 +117,7 @@ const InvoiceDetailsPage: React.FC = () => {
           <Button variant="outline" onClick={() => toast.info('Print functionality coming soon!')}>
             <Printer className="mr-2 h-4 w-4" /> Print
           </Button>
-          <Button onClick={() => toast.info('Edit functionality will open form.')}>
+          <Button onClick={handleEditInvoice}>
             <Edit className="mr-2 h-4 w-4" /> Edit Invoice
           </Button>
           <Button variant="secondary" onClick={handleRecordPayment} disabled={invoice.amount_due <= 0}>
@@ -240,14 +250,22 @@ const InvoiceDetailsPage: React.FC = () => {
       </Card>
 
       {invoice && (
-        <PaymentForm
-          isOpen={isPaymentFormOpen}
-          onClose={() => setIsPaymentFormOpen(false)}
-          onSave={handleSavePayment}
-          invoiceId={invoice.id}
-          invoiceCurrency={invoice.currency}
-          invoiceAmountDue={invoice.amount_due}
-        />
+        <>
+          <PaymentForm
+            isOpen={isPaymentFormOpen}
+            onClose={() => setIsPaymentFormOpen(false)}
+            onSave={handleSavePayment}
+            invoiceId={invoice.id}
+            invoiceCurrency={invoice.currency}
+            invoiceAmountDue={invoice.amount_due}
+          />
+          <InvoiceForm
+            isOpen={isEditFormOpen}
+            onClose={() => setIsEditFormOpen(false)}
+            onSave={handleSaveInvoice}
+            initialData={invoice}
+          />
+        </>
       )}
     </div>
   );

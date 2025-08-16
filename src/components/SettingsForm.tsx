@@ -48,6 +48,9 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
   const [locale, setLocale] = useState(initialSettingsData?.locale || 'en-PK');
   const [timezone, setTimezone] = useState(initialSettingsData?.timezone || 'Asia/Karachi');
 
+  const commonCurrencies = ['PKR', 'USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF', 'CNY', 'SEK', 'NZD'];
+
+
   useEffect(() => {
     if (isOpen) {
       setCompanyName(initialCompanyData?.name || '');
@@ -229,14 +232,22 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
             </div>
             <div className="grid gap-2">
               <Label htmlFor="companyCurrency">Default Currency</Label>
-              <Input
-                id="companyCurrency"
+              <Select
                 value={companyCurrency}
-                onChange={(e) => setCompanyCurrency(e.target.value)}
-                required
+                onValueChange={setCompanyCurrency}
                 disabled={loading}
-                placeholder="e.g., PKR, USD, EUR"
-              />
+              >
+                <SelectTrigger id="companyCurrency">
+                  <SelectValue placeholder="Select currency" />
+                </SelectTrigger>
+                <SelectContent>
+                  {commonCurrencies.map(currency => (
+                    <SelectItem key={currency} value={currency}>
+                      {currency}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="col-span-2 grid gap-2">
               <Label htmlFor="companyAddress">Address (Optional)</Label>

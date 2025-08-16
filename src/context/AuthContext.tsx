@@ -45,18 +45,40 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               toast.error('Failed to check company status.');
             } else if (!companies || companies.length === 0) {
               // No company found for this user, create one
-              const { error: insertError } = await supabase
+              const { data: newCompany, error: insertCompanyError } = await supabase
                 .from('companies')
                 .insert({
                   name: `${currentSession.user.email?.split('@')[0]}'s Company`,
                   created_by: currentSession.user.id,
-                });
+                })
+                .select('id')
+                .single();
 
-              if (insertError) {
-                console.error('Error creating company:', insertError);
+              if (insertCompanyError) {
+                console.error('Error creating company:', insertCompanyError);
                 toast.error('Failed to create company for new user.');
               } else {
                 toast.success('Welcome! Your company has been created.');
+
+                // Also create default settings for the new company
+                const { error: insertSettingsError } = await supabase
+                  .from('settings')
+                  .insert({
+                    company_id: newCompany.id,
+                    default_tax_rate: 0,
+                    default_currency: 'PKR',
+                    numbering_prefix: 'INV-',
+                    next_number: 1,
+                    locale: 'en-PK',
+                    timezone: 'Asia/Karachi',
+                  });
+
+                if (insertSettingsError) {
+                  console.error('Error creating default settings:', insertSettingsError);
+                  toast.error('Failed to create default settings for new company.');
+                } else {
+                  toast.success('Default settings created.');
+                }
               }
             }
           }

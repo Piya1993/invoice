@@ -33,6 +33,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
   const [loading, setLoading] = useState(false);
   const [clients, setClients] = useState<Tables<'clients'>[]>([]);
   const [products, setProducts] = useState<Tables<'products'>[]>([]);
+  const [companySettings, setCompanySettings] = useState<Tables<'settings'> | null>(null);
 
   const [invoiceNumber, setInvoiceNumber] = useState(initialData?.number || '');
   const [clientId, setClientId] = useState(initialData?.client_id || '');
@@ -52,7 +53,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
 
   const invoiceStatuses: Enums<'invoice_status'>[] = ['draft', 'sent', 'paid', 'overdue', 'void'];
 
-  const fetchClientsAndProducts = useCallback(async () => {
+  const fetchClientsProductsAndSettings = useCallback(async () => {
     if (!user?.id) return;
 
     setLoading(true);
@@ -68,6 +69,17 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
       }
 
       setCurrency(companyData.currency); // Set default currency from company settings
+
+      const { data: settingsData, error: settingsError } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('company_id', companyData.id)
+        .single();
+
+      if (settingsError && settingsError.code !== 'PGRST116') { // PGRST116 means no rows found
+        throw settingsError;
+      }
+      setCompanySettings(settingsData);
 
       const { data: clientsData, error: clientsError } = await supabase
         .from('clients')
@@ -88,8 +100,8 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
       setProducts(productsData || []);
 
     } catch (error: any) {
-      console.error('Error fetching clients/products:', error);
-      toast.error(error.message || 'Failed to load clients or products.');
+      console.error('Error fetching clients/products/settings:', error);
+      toast.error(error.message || 'Failed to load clients, products, or settings.');
     } finally {
       setLoading(false);
     }
@@ -97,7 +109,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
 
   useEffect(() => {
     if (isOpen) {
-      fetchClientsAndProducts();
+      fetchClientsProductsAndSettings();
       if (initialData) {
         setInvoiceNumber(initialData.number || '');
         setClientId(initialData.client_id);
@@ -110,7 +122,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
         setInvoiceItems(initialData.invoice_items.map(item => ({ ...item, tempId: item.id })));
       } else {
         // Reset form for new invoice
-        setInvoiceNumber('');
+        setInvoiceNumber(''); // Will be set by useEffect below
         setClientId('');
         setIssueDate(new Date());
         setDueDate(new Date());
@@ -129,7 +141,16 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
         }]);
       }
     }
-  }, [isOpen, initialData, fetchClientsAndProducts]);
+  }, [isOpen, initialData, fetchClientsProductsAndSettings]);
+
+  // Effect to set initial invoice number for new invoices
+  useEffect(() => {
+    if (isOpen && !initialData && companySettings) {
+      const nextNum = companySettings.next_number.toString().padStart(3, '0'); // e.g., 1 -> "001"
+      setInvoiceNumber(`${companySettings.numbering_prefix}${nextNum}`);
+    }
+  }, [isOpen, initialData, companySettings]);
+
 
   const calculateTotals = useCallback(() => {
     let currentSubtotal = new Decimal(0);
@@ -350,6 +371,18 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
 
         if (itemsError) throw itemsError;
         savedInvoiceItems = newItems;
+
+        // Increment next_number in settings
+        if (companySettings) {
+          const { error: updateSettingsError } = await supabase
+            .from('settings')
+            .update({ next_number: companySettings.next_number + 1 })
+            .eq('company_id', companySettings.company_id);
+          if (updateSettingsError) {
+            console.error('Error incrementing next_number:', updateSettingsError);
+            toast.error('Failed to update next invoice number in settings.');
+          }
+        }
       }
 
       onSave({ ...savedInvoice, invoice_items: savedInvoiceItems });
@@ -392,7 +425,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
                 id="invoiceNumber"
                 value={invoiceNumber}
                 onChange={(e) => setInvoiceNumber(e.target.value)}
-                disabled={loading}
+                disabled={loading || (companySettings && !initialData)} // Disable if auto-generated for new invoices
               />
             </div>
           </div>

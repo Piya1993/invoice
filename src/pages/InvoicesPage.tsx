@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, Edit, Eye, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { PlusCircle, Edit, Eye, Search } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Tables, Enums } from '@/types/supabase';
 import { toast } from 'react-hot-toast';
@@ -16,8 +16,9 @@ import { useNavigate } from 'react-router-dom';
 import useCompanySettings from '@/hooks/useCompanySettings';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog'; // Import the new component
+import ConfirmDeleteDialog from '@/components/ConfirmDeleteDialog';
 import useDebounce from '@/hooks/useDebounce';
+import PaginationControls from '@/components/PaginationControls'; // Import the new component
 
 // Extend Invoice type to include related client and invoice_items
 type InvoiceWithDetails = Tables<'invoices'> & {
@@ -262,27 +263,13 @@ const InvoicesPage: React.FC = () => {
                   ))}
                 </TableBody>
               </Table>
-              {totalPages > 1 && (
-                <div className="flex justify-between items-center mt-4">
-                  <Button
-                    variant="outline"
-                    onClick={handlePreviousPage}
-                    disabled={currentPage === 1}
-                  >
-                    <ChevronLeft className="h-4 w-4 mr-2" /> Previous
-                  </Button>
-                  <span className="text-sm text-muted-foreground">
-                    Page {currentPage} of {totalPages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    onClick={handleNextPage}
-                    disabled={currentPage === totalPages}
-                  >
-                    Next <ChevronRight className="h-4 w-4 ml-2" />
-                  </Button>
-                </div>
-              )}
+              <PaginationControls
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPreviousPage={handlePreviousPage}
+                onNextPage={handleNextPage}
+                disabled={loadingInvoices}
+              />
             </>
           )}
         </CardContent>

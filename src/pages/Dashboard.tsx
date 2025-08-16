@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useNavigate } from 'react-router-dom'; // Corrected import
+import { useNavigate } from 'react-router-dom'; // Corrected hook
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'react-hot-toast';
@@ -14,6 +14,7 @@ import { DollarSign, FileText, TrendingUp, Wallet, Clock, PlusCircle, Users, Pac
 import { Tables } from '@/types/supabase';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
+import useCompany from '@/hooks/useCompany'; // Import the new hook
 
 // Extend Invoice type to include related client for display
 type InvoiceWithClient = Tables<'invoices'> & {
@@ -22,8 +23,9 @@ type InvoiceWithClient = Tables<'invoices'> & {
 
 const Dashboard: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
+  const { company, loading: companyLoading, error: companyError } = useCompany(); // Use the new hook
   const navigate = useNavigate(); // Corrected hook
-  const [loading, setLoading] = useState(true);
+  const [loadingDashboard, setLoadingDashboard] = useState(true); // Renamed to avoid conflict
   const [dashboardData, setDashboardData] = useState({
     totalInvoices: 0,
     totalRevenue: new Decimal(0),
@@ -35,21 +37,15 @@ const Dashboard: React.FC = () => {
   });
 
   const fetchDashboardData = useCallback(async () => {
-    if (!user?.id) return;
+    if (!company?.id) {
+      setLoadingDashboard(false);
+      return;
+    }
 
-    setLoading(true);
+    setLoadingDashboard(true);
     try {
-      const { data: companyData, error: companyError } = await supabase
-        .from('companies')
-        .select('id, currency')
-        .eq('created_by', user.id)
-        .single();
-
-      if (companyError || !companyData) {
-        throw new Error('Could not find company for the current user. Please ensure your company is set up.');
-      }
-      const companyId = companyData.id;
-      const companyCurrency = companyData.currency || 'PKR';
+      const companyId = company.id;
+      const companyCurrency = company.currency || 'PKR';
 
       const { data: invoicesData, error: invoicesError } = await supabase
         .from('invoices')
@@ -96,17 +92,20 @@ const Dashboard: React.FC = () => {
       console.error('Error fetching dashboard data:', error);
       toast.error(error.message || 'Failed to fetch dashboard data.');
     } finally {
-      setLoading(false);
+      setLoadingDashboard(false);
     }
-  }, [user]);
+  }, [company]);
 
   useEffect(() => {
-    if (!user && !authLoading) {
+    if (!authLoading && !user) {
       navigate('/auth');
-    } else if (user && !authLoading) {
+    } else if (!companyLoading && company) {
       fetchDashboardData();
+    } else if (!companyLoading && companyError) {
+      toast.error(companyError);
+      setLoadingDashboard(false);
     }
-  }, [user, authLoading, navigate, fetchDashboardData]);
+  }, [user, authLoading, company, companyLoading, companyError, navigate, fetchDashboardData]);
 
   const handleSignOut = async () => {
     const { error } = await supabase.auth.signOut();
@@ -117,10 +116,20 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  if (authLoading || loading) {
+  if (authLoading || companyLoading || loadingDashboard) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <p>Loading dashboard...</p>
+      </div>
+    );
+  }
+
+  if (companyError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">
+        <h2 className="text-xl font-semibold text-red-600 mb-4">Error: {companyError}</h2>
+        <p className="text-muted-foreground mb-4">Please ensure your company is set up correctly in settings.</p>
+        <Button onClick={() => navigate('/setup-company')}>Go to Company Setup</Button>
       </div>
     );
   }

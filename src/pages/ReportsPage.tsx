@@ -10,6 +10,7 @@ import { useAuth } from '@/context/AuthContext';
 import { formatCurrency, fromSmallestUnit } from '@/lib/utils';
 import Decimal from 'decimal.js';
 import { subDays } from 'date-fns';
+import useCompany from '@/hooks/useCompany'; // Import the new hook
 
 // Extend Invoice type to include related client and invoice_items for calculations
 type InvoiceWithDetails = Tables<'invoices'> & {
@@ -18,8 +19,9 @@ type InvoiceWithDetails = Tables<'invoices'> & {
 };
 
 const ReportsPage: React.FC = () => {
-  const { user, loading: authLoading } = useAuth();
-  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const { company, loading: companyLoading, error: companyError } = useCompany(); // Use the new hook
+  const [loadingReports, setLoadingReports] = useState(true); // Renamed to avoid conflict
   const [reportData, setReportData] = useState({
     totalInvoices: 0,
     paidInvoices: 0,
@@ -42,27 +44,21 @@ const ReportsPage: React.FC = () => {
   const [displayCurrency, setDisplayCurrency] = useState('PKR'); // State to hold the actual currency
 
   const fetchReportData = useCallback(async () => {
-    if (!user?.id) return;
+    if (!company?.id) {
+      setLoadingReports(false);
+      return;
+    }
 
-    setLoading(true);
+    setLoadingReports(true);
+    setError(null); // Clear previous errors
     try {
-      const { data: companyData, error: companyError } = await supabase
-        .from('companies')
-        .select('id, currency')
-        .eq('created_by', user.id)
-        .single();
-
-      if (companyError || !companyData) {
-        throw new Error('Could not find company for the current user. Please ensure your company is set up.');
-      }
-      const companyId = companyData.id;
-      setDisplayCurrency(companyData.currency || 'PKR'); // Set the display currency
+      setDisplayCurrency(company.currency || 'PKR'); // Set the display currency from fetched company
 
       // Fetch all invoices with items and clients
       const { data: invoicesData, error: invoicesError } = await supabase
         .from('invoices')
         .select('*, clients(*), invoice_items(*)')
-        .eq('company_id', companyId);
+        .eq('company_id', company.id);
 
       if (invoicesError) throw invoicesError;
 
@@ -70,7 +66,7 @@ const ReportsPage: React.FC = () => {
       const { data: clientsData, error: clientsError } = await supabase
         .from('clients')
         .select('*')
-        .eq('company_id', companyId);
+        .eq('company_id', company.id);
 
       if (clientsError) throw clientsError;
 
@@ -78,7 +74,7 @@ const ReportsPage: React.FC = () => {
       const { data: productsData, error: productsError } = await supabase
         .from('products')
         .select('*')
-        .eq('company_id', companyId);
+        .eq('company_id', company.id);
 
       if (productsError) throw productsError;
 
@@ -179,21 +175,35 @@ const ReportsPage: React.FC = () => {
     } catch (error: any) {
       console.error('Error fetching reports:', error);
       toast.error(error.message || 'Failed to fetch report data.');
+      setError(error.message || 'Failed to fetch report data.');
     } finally {
-      setLoading(false);
+      setLoadingReports(false);
     }
-  }, [user]);
+  }, [company]);
 
   useEffect(() => {
-    if (!authLoading && user) {
+    if (!companyLoading && company) {
       fetchReportData();
+    } else if (!companyLoading && companyError) {
+      toast.error(companyError);
+      setLoadingReports(false);
     }
-  }, [user, authLoading, fetchReportData]);
+  }, [company, companyLoading, companyError, fetchReportData]);
 
-  if (authLoading || loading) {
+  if (companyLoading || loadingReports) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <p>Loading reports...</p>
+      </div>
+    );
+  }
+
+  if (companyError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">
+        <h2 className="text-xl font-semibold text-red-600 mb-4">Error: {companyError}</h2>
+        <p className="text-muted-foreground mb-4">Please ensure your company is set up correctly in settings.</p>
+        <Button onClick={() => window.location.reload()}>Retry</Button>
       </div>
     );
   }

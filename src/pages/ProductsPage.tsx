@@ -11,34 +11,28 @@ import { toast } from 'react-hot-toast';
 import ProductForm from '@/components/ProductForm';
 import { useAuth } from '@/context/AuthContext';
 import { formatCurrency } from '@/lib/utils';
+import useCompany from '@/hooks/useCompany'; // Import the new hook
 
 const ProductsPage: React.FC = () => {
-  const { user, loading: authLoading } = useAuth();
+  const { user } = useAuth();
+  const { company, loading: companyLoading, error: companyError } = useCompany(); // Use the new hook
   const [products, setProducts] = useState<Tables<'products'>[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingProducts, setLoadingProducts] = useState(true); // Renamed to avoid conflict
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Tables<'products'> | null>(null);
 
   const fetchProducts = useCallback(async () => {
-    if (!user?.id) return;
+    if (!company?.id) {
+      setLoadingProducts(false);
+      return;
+    }
 
-    setLoading(true);
+    setLoadingProducts(true);
     try {
-      // First, get the user's company_id
-      const { data: companyData, error: companyError } = await supabase
-        .from('companies')
-        .select('id')
-        .eq('created_by', user.id)
-        .single();
-
-      if (companyError || !companyData) {
-        throw new Error('Could not find company for the current user. Please ensure your company is set up.');
-      }
-
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .eq('company_id', companyData.id)
+        .eq('company_id', company.id)
         .order('name', { ascending: true });
 
       if (error) throw error;
@@ -47,15 +41,18 @@ const ProductsPage: React.FC = () => {
       console.error('Error fetching products:', error);
       toast.error(error.message || 'Failed to fetch products.');
     } finally {
-      setLoading(false);
+      setLoadingProducts(false);
     }
-  }, [user]);
+  }, [company]);
 
   useEffect(() => {
-    if (!authLoading && user) {
+    if (!companyLoading && company) {
       fetchProducts();
+    } else if (!companyLoading && companyError) {
+      toast.error(companyError);
+      setLoadingProducts(false);
     }
-  }, [user, authLoading, fetchProducts]);
+  }, [company, companyLoading, companyError, fetchProducts]);
 
   const handleSaveProduct = (newProduct: Tables<'products'>) => {
     if (editingProduct) {
@@ -93,10 +90,20 @@ const ProductsPage: React.FC = () => {
     }
   };
 
-  if (authLoading || loading) {
+  if (companyLoading || loadingProducts) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <p>Loading products...</p>
+      </div>
+    );
+  }
+
+  if (companyError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">
+        <h2 className="text-xl font-semibold text-red-600 mb-4">Error: {companyError}</h2>
+        <p className="text-muted-foreground mb-4">Please ensure your company is set up correctly in settings.</p>
+        <Button onClick={() => window.location.reload()}>Retry</Button>
       </div>
     );
   }

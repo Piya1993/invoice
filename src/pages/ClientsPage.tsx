@@ -10,34 +10,28 @@ import { Tables } from '@/types/supabase';
 import { toast } from 'react-hot-toast';
 import ClientForm from '@/components/ClientForm';
 import { useAuth } from '@/context/AuthContext';
+import useCompany from '@/hooks/useCompany'; // Import the new hook
 
 const ClientsPage: React.FC = () => {
-  const { user, loading: authLoading } = useAuth();
+  const { user } = useAuth();
+  const { company, loading: companyLoading, error: companyError } = useCompany(); // Use the new hook
   const [clients, setClients] = useState<Tables<'clients'>[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingClients, setLoadingClients] = useState(true); // Renamed to avoid conflict
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Tables<'clients'> | null>(null);
 
   const fetchClients = useCallback(async () => {
-    if (!user?.id) return;
+    if (!company?.id) {
+      setLoadingClients(false);
+      return;
+    }
 
-    setLoading(true);
+    setLoadingClients(true);
     try {
-      // First, get the user's company_id
-      const { data: companyData, error: companyError } = await supabase
-        .from('companies')
-        .select('id')
-        .eq('created_by', user.id)
-        .single();
-
-      if (companyError || !companyData) {
-        throw new Error('Could not find company for the current user. Please ensure your company is set up.');
-      }
-
       const { data, error } = await supabase
         .from('clients')
         .select('*')
-        .eq('company_id', companyData.id)
+        .eq('company_id', company.id)
         .order('name', { ascending: true });
 
       if (error) throw error;
@@ -46,15 +40,18 @@ const ClientsPage: React.FC = () => {
       console.error('Error fetching clients:', error);
       toast.error(error.message || 'Failed to fetch clients.');
     } finally {
-      setLoading(false);
+      setLoadingClients(false);
     }
-  }, [user]);
+  }, [company]);
 
   useEffect(() => {
-    if (!authLoading && user) {
+    if (!companyLoading && company) {
       fetchClients();
+    } else if (!companyLoading && companyError) {
+      toast.error(companyError);
+      setLoadingClients(false);
     }
-  }, [user, authLoading, fetchClients]);
+  }, [company, companyLoading, companyError, fetchClients]);
 
   const handleSaveClient = (newClient: Tables<'clients'>) => {
     if (editingClient) {
@@ -92,10 +89,20 @@ const ClientsPage: React.FC = () => {
     }
   };
 
-  if (authLoading || loading) {
+  if (companyLoading || loadingClients) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <p>Loading clients...</p>
+      </div>
+    );
+  }
+
+  if (companyError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">
+        <h2 className="text-xl font-semibold text-red-600 mb-4">Error: {companyError}</h2>
+        <p className="text-muted-foreground mb-4">Please ensure your company is set up correctly in settings.</p>
+        <Button onClick={() => window.location.reload()}>Retry</Button>
       </div>
     );
   }

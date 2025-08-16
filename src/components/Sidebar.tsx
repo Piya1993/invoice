@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Home, FileText, Users, Package, BarChart, Settings, LogOut } from 'lucide-react';
+import { Home, FileText, Users, Package, BarChart, Settings, LogOut, User } from 'lucide-react'; // Added User icon
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'react-hot-toast';
@@ -60,6 +60,12 @@ const Sidebar: React.FC = () => {
           <Button variant="ghost" className="w-full justify-start text-lg py-6">
             <Settings className="mr-3 h-5 w-5" />
             Settings
+          </Button>
+        </Link>
+        <Link to="/profile"> {/* New Profile Link */}
+          <Button variant="ghost" className="w-full justify-start text-lg py-6">
+            <User className="mr-3 h-5 w-5" />
+            Profile
           </Button>
         </Link>
       </nav>

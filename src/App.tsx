@@ -12,7 +12,8 @@ import ProductsPage from '@/pages/ProductsPage';
 import ReportsPage from '@/pages/ReportsPage';
 import SettingsPage from '@/pages/SettingsPage';
 import InvoiceDetailsPage from '@/pages/InvoiceDetailsPage';
-import CompanySetupPage from '@/pages/CompanySetupPage'; // Import the new page
+import CompanySetupPage from '@/pages/CompanySetupPage';
+import ProfilePage from '@/pages/ProfilePage'; // Import the new page
 import Layout from '@/components/Layout';
 import { Toaster } from 'react-hot-toast';
 
@@ -33,7 +34,8 @@ function App() {
             <Route path="/products" element={<ProductsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/setup-company" element={<CompanySetupPage />} /> {/* New route */}
+            <Route path="/setup-company" element={<CompanySetupPage />} />
+            <Route path="/profile" element={<ProfilePage />} /> {/* New route */}
           </Route>
           {/* Add other routes here as we build them */}
         </Routes>

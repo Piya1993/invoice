@@ -128,10 +128,6 @@ const InvoiceDetailsPage: React.FC = () => {
   const handleMarkAsPaid = async () => {
     if (!invoice) return;
 
-    if (!window.confirm('Are you sure you want to mark this invoice as PAID? This will set the amount due to zero.')) {
-      return;
-    }
-
     setLoadingInvoiceDetails(true);
     try {
       const { data, error } = await supabase
@@ -237,9 +233,25 @@ const InvoiceDetailsPage: React.FC = () => {
           <Button variant="secondary" onClick={handleRecordPayment} disabled={isPaid}>
             <DollarSign className="mr-2 h-4 w-4" /> Record Payment
           </Button>
-          <Button variant="success" onClick={handleMarkAsPaid} disabled={isPaid}>
-            <CheckCircle className="mr-2 h-4 w-4" /> Mark as Paid
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="success" disabled={isPaid}>
+                <CheckCircle className="mr-2 h-4 w-4" /> Mark as Paid
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Mark Invoice as Paid?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action will set the invoice status to 'Paid' and the amount due to zero. Are you sure you want to proceed?
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleMarkAsPaid}>Mark as Paid</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="destructive" disabled={loadingInvoiceDetails}>

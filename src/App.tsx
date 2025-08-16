@@ -13,7 +13,9 @@ import ReportsPage from '@/pages/ReportsPage';
 import SettingsPage from '@/pages/SettingsPage';
 import InvoiceDetailsPage from '@/pages/InvoiceDetailsPage';
 import CompanySetupPage from '@/pages/CompanySetupPage';
-import ProfilePage from '@/pages/ProfilePage'; // Import the new page
+import ProfilePage from '@/pages/ProfilePage';
+import ResetPasswordPage from '@/pages/ResetPasswordPage'; // Import new page
+import UpdatePasswordPage from '@/pages/UpdatePasswordPage'; // Import new page
 import Layout from '@/components/Layout';
 import { Toaster } from 'react-hot-toast';
 
@@ -25,6 +27,8 @@ function App() {
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<AuthPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} /> {/* New route */}
+          <Route path="/update-password" element={<UpdatePasswordPage />} /> {/* New route */}
           {/* Protected routes using the Layout component */}
           <Route element={<Layout />}>
             <Route path="/dashboard" element={<Dashboard />} />
@@ -35,7 +39,7 @@ function App() {
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/setup-company" element={<CompanySetupPage />} />
-            <Route path="/profile" element={<ProfilePage />} /> {/* New route */}
+            <Route path="/profile" element={<ProfilePage />} />
           </Route>
           {/* Add other routes here as we build them */}
         </Routes>

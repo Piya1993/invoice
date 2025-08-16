@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'react-hot-toast';
+import { Link } from 'react-router-dom'; // Import Link
 
 const AuthForm: React.FC = () => {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -87,7 +88,17 @@ const AuthForm: React.FC = () => {
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="password">Password</Label>
+            <div className="flex items-center">
+              <Label htmlFor="password">Password</Label>
+              {!isSignUp && ( // Only show forgot password for sign-in
+                <Link
+                  to="/reset-password"
+                  className="ml-auto inline-block text-sm underline"
+                >
+                  Forgot your password?
+                </Link>
+              )}
+            </div>
             <Input
               id="password"
               type="password"

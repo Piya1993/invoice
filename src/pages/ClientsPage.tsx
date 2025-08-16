@@ -4,14 +4,25 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, Edit, Trash2, Search, ChevronLeft, ChevronRight } from 'lucide-react'; // Import pagination icons
+import { PlusCircle, Edit, Trash2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Tables } from '@/types/supabase';
 import { toast } from 'react-hot-toast';
 import ClientForm from '@/components/ClientForm';
 import { useAuth } from '@/context/AuthContext';
 import useCompany from '@/hooks/useCompany';
-import { Input } from '@/components/ui/input'; // Import Input for search
+import { Input } from '@/components/ui/input';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const ClientsPage: React.FC = () => {
   const { user } = useAuth();
@@ -26,7 +37,7 @@ const ClientsPage: React.FC = () => {
 
   // State for pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10); // You can make this configurable
+  const [itemsPerPage] = useState(10);
   const [totalCount, setTotalCount] = useState(0);
 
   const fetchClients = useCallback(async () => {
@@ -42,7 +53,7 @@ const ClientsPage: React.FC = () => {
 
       let query = supabase
         .from('clients')
-        .select('*', { count: 'exact' }) // Request exact count
+        .select('*', { count: 'exact' })
         .eq('company_id', company.id);
 
       // Apply search term
@@ -51,20 +62,20 @@ const ClientsPage: React.FC = () => {
       }
 
       query = query.order('name', { ascending: true })
-                   .range(from, to); // Apply pagination range
+                   .range(from, to);
 
       const { data, error, count } = await query;
 
       if (error) throw error;
       setClients(data || []);
-      setTotalCount(count || 0); // Set the total count
+      setTotalCount(count || 0);
     } catch (error: any) {
       console.error('Error fetching clients:', error);
       toast.error(error.message || 'Failed to fetch clients.');
     } finally {
       setLoadingClients(false);
     }
-  }, [company, searchTerm, currentPage, itemsPerPage]); // Add pagination dependencies
+  }, [company, searchTerm, currentPage, itemsPerPage]);
 
   useEffect(() => {
     if (!companyLoading && company) {
@@ -76,7 +87,6 @@ const ClientsPage: React.FC = () => {
   }, [company, companyLoading, companyError, fetchClients]);
 
   const handleSaveClient = (newClient: Tables<'clients'>) => {
-    // After saving, re-fetch to ensure pagination and filters are correctly applied
     fetchClients();
     setEditingClient(null);
     setIsFormOpen(false);
@@ -88,10 +98,7 @@ const ClientsPage: React.FC = () => {
   };
 
   const handleDeleteClient = async (clientId: string) => {
-    if (!window.confirm('Are you sure you want to delete this client?')) return;
-
-    // Optimistic UI update is tricky with pagination, so we'll just re-fetch
-    setLoadingClients(true); // Show loading while deleting
+    setLoadingClients(true);
     try {
       const { error } = await supabase
         .from('clients')
@@ -100,11 +107,11 @@ const ClientsPage: React.FC = () => {
 
       if (error) throw error;
       toast.success('Client deleted successfully!');
-      fetchClients(); // Re-fetch after deletion
+      fetchClients();
     } catch (error: any) {
       console.error('Error deleting client:', error);
       toast.error(error.message || 'Failed to delete client.');
-      setLoadingClients(false); // Hide loading on error
+      setLoadingClients(false);
     }
   };
 
@@ -155,7 +162,7 @@ const ClientsPage: React.FC = () => {
             <Input
               placeholder="Search by name, email, or phone..."
               value={searchTerm}
-              onChange={(e) => setCurrentPage(1) || setSearchTerm(e.target.value)} // Reset page on search
+              onChange={(e) => setCurrentPage(1) || setSearchTerm(e.target.value)}
               className="pl-9"
             />
           </div>
@@ -192,9 +199,25 @@ const ClientsPage: React.FC = () => {
                         <Button variant="ghost" size="sm" onClick={() => handleEditClient(client)}>
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteClient(client.id)}>
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This action cannot be undone. This will permanently delete the client.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDeleteClient(client.id)}>Continue</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </TableCell>
                     </TableRow>
                   ))}

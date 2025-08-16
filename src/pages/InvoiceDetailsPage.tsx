@@ -12,13 +12,13 @@ import { toast } from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
 import { formatCurrency, fromSmallestUnit } from '@/lib/utils';
 import { format } from 'date-fns';
-import { ArrowLeft, Edit, Printer, DollarSign, CheckCircle, Trash2 } from 'lucide-react'; // Import Trash2 icon
+import { ArrowLeft, Edit, Printer, DollarSign, CheckCircle, Trash2 } from 'lucide-react';
 import PaymentForm from '@/components/PaymentForm';
 import InvoiceForm from '@/components/InvoiceForm';
 import InvoicePdfGenerator from '@/components/InvoicePdfGenerator';
-import InvoiceDisplay from '@/components/InvoiceDisplay'; // Import the new component
-import Decimal from 'decimal.js'; // Import Decimal
-import useCompany from '@/hooks/useCompany'; // Import the new hook
+import InvoiceDisplay from '@/components/InvoiceDisplay';
+import Decimal from 'decimal.js';
+import useCompany from '@/hooks/useCompany';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,7 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"; // Import AlertDialog components
+} from "@/components/ui/alert-dialog";
 
 // Extend Invoice type to include related client and invoice_items
 type InvoiceWithDetails = Tables<'invoices'> & {
@@ -42,14 +42,14 @@ const InvoiceDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
-  const { company, loading: companyLoading, error: companyError } = useCompany(); // Use the new hook
+  const { company, loading: companyLoading, error: companyError } = useCompany();
   const [invoice, setInvoice] = useState<InvoiceWithDetails | null>(null);
   const [settings, setSettings] = useState<Tables<'settings'> | null>(null);
-  const [loadingInvoiceDetails, setLoadingInvoiceDetails] = useState(true); // Renamed to avoid conflict
+  const [loadingInvoiceDetails, setLoadingInvoiceDetails] = useState(true);
   const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
   const [isEditFormOpen, setIsEditFormOpen] = useState(false);
 
-  const invoiceDisplayRef = useRef<HTMLDivElement>(null); // Ref for the InvoiceDisplay component
+  const invoiceDisplayRef = useRef<HTMLDivElement>(null);
 
   const fetchInvoiceDetails = useCallback(async () => {
     if (!user?.id || !id || !company?.id) {
@@ -66,7 +66,7 @@ const InvoiceDetailsPage: React.FC = () => {
         .eq('company_id', company.id)
         .single();
 
-      if (settingsError && settingsError.code !== 'PGRST116') { // PGRST116 means no rows found
+      if (settingsError && settingsError.code !== 'PGRST116') {
         throw settingsError;
       }
       setSettings(settingsData);
@@ -102,7 +102,7 @@ const InvoiceDetailsPage: React.FC = () => {
       } else if (companyError) {
         toast.error(companyError);
         setLoadingInvoiceDetails(false);
-        navigate('/setup-company'); // Redirect if company not found
+        navigate('/setup-company');
       }
     }
   }, [user, authLoading, company, companyLoading, companyError, navigate, fetchInvoiceDetails]);
@@ -112,7 +112,7 @@ const InvoiceDetailsPage: React.FC = () => {
   };
 
   const handleSavePayment = (newPayment: Tables<'payments'>) => {
-    fetchInvoiceDetails(); // Re-fetch invoice details to update totals and payment list
+    fetchInvoiceDetails();
     setIsPaymentFormOpen(false);
   };
 
@@ -121,7 +121,7 @@ const InvoiceDetailsPage: React.FC = () => {
   };
 
   const handleSaveInvoice = (updatedInvoice: InvoiceWithDetails) => {
-    fetchInvoiceDetails(); // Re-fetch to update all fields
+    fetchInvoiceDetails();
     setIsEditFormOpen(false);
   };
 
@@ -138,8 +138,8 @@ const InvoiceDetailsPage: React.FC = () => {
         .from('invoices')
         .update({
           status: 'paid',
-          amount_paid: invoice.total, // Set amount paid to total
-          amount_due: 0, // Set amount due to zero
+          amount_paid: invoice.total,
+          amount_due: 0,
         })
         .eq('id', invoice.id)
         .select()
@@ -147,7 +147,7 @@ const InvoiceDetailsPage: React.FC = () => {
 
       if (error) throw error;
       toast.success('Invoice marked as paid successfully!');
-      fetchInvoiceDetails(); // Re-fetch to update UI
+      fetchInvoiceDetails();
     } catch (error: any) {
       console.error('Error marking invoice as paid:', error);
       toast.error(error.message || 'Failed to mark invoice as paid.');
@@ -183,7 +183,7 @@ const InvoiceDetailsPage: React.FC = () => {
 
       if (invoiceError) throw invoiceError;
       toast.success('Invoice and all associated data deleted successfully!');
-      navigate('/invoices'); // Redirect to invoices list after deletion
+      navigate('/invoices');
     } catch (error: any) {
       console.error('Error deleting invoice:', error);
       toast.error(error.message || 'Failed to delete invoice.');
@@ -211,7 +211,7 @@ const InvoiceDetailsPage: React.FC = () => {
   }
 
   if (!invoice) {
-    return null; // Redirect handled in fetchInvoiceDetails
+    return null;
   }
 
   const isPaid = invoice.amount_due <= 0 || invoice.status === 'paid';
@@ -335,9 +335,9 @@ const InvoiceDetailsPage: React.FC = () => {
               <TableBody>
                 {invoice.invoice_items.map((item) => {
                   const qty = new Decimal(item.qty || 0);
-                  const unitPrice = new Decimal(item.unit_price || 0); // Already in smallest unit
+                  const unitPrice = new Decimal(item.unit_price || 0);
                   const taxRate = new Decimal(item.tax_rate || 0).dividedBy(100);
-                  const discount = new Decimal(item.discount || 0); // Already in smallest unit
+                  const discount = new Decimal(item.discount || 0);
 
                   const lineTotalBeforeTax = qty.times(unitPrice);
                   const lineTax = lineTotalBeforeTax.times(taxRate);
@@ -411,7 +411,7 @@ const InvoiceDetailsPage: React.FC = () => {
         </CardContent>
       </Card>
 
-      {invoice && company && ( // Ensure company is available before rendering forms
+      {invoice && company && (
         <>
           <PaymentForm
             isOpen={isPaymentFormOpen}

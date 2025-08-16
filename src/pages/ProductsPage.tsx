@@ -4,21 +4,32 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, Edit, Trash2, Search, ChevronLeft, ChevronRight } from 'lucide-react'; // Import pagination icons
+import { PlusCircle, Edit, Trash2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Tables } from '@/types/supabase';
 import { toast } from 'react-hot-toast';
 import ProductForm from '@/components/ProductForm';
 import { useAuth } from '@/context/AuthContext';
 import { formatCurrency } from '@/lib/utils';
-import useCompany from '@/hooks/useCompany'; // Import the new hook
-import { Input } from '@/components/ui/input'; // Import Input for search
+import useCompany from '@/hooks/useCompany';
+import { Input } from '@/components/ui/input';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const ProductsPage: React.FC = () => {
   const { user } = useAuth();
-  const { company, loading: companyLoading, error: companyError } = useCompany(); // Use the new hook
+  const { company, loading: companyLoading, error: companyError } = useCompany();
   const [products, setProducts] = useState<Tables<'products'>[]>([]);
-  const [loadingProducts, setLoadingProducts] = useState(true); // Renamed to avoid conflict
+  const [loadingProducts, setLoadingProducts] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Tables<'products'> | null>(null);
 
@@ -27,7 +38,7 @@ const ProductsPage: React.FC = () => {
 
   // State for pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10); // You can make this configurable
+  const [itemsPerPage] = useState(10);
   const [totalCount, setTotalCount] = useState(0);
 
   const fetchProducts = useCallback(async () => {
@@ -43,7 +54,7 @@ const ProductsPage: React.FC = () => {
 
       let query = supabase
         .from('products')
-        .select('*', { count: 'exact' }) // Request exact count
+        .select('*', { count: 'exact' })
         .eq('company_id', company.id);
 
       // Apply search term
@@ -52,20 +63,20 @@ const ProductsPage: React.FC = () => {
       }
 
       query = query.order('name', { ascending: true })
-                   .range(from, to); // Apply pagination range
+                   .range(from, to);
 
       const { data, error, count } = await query;
 
       if (error) throw error;
       setProducts(data || []);
-      setTotalCount(count || 0); // Set the total count
+      setTotalCount(count || 0);
     } catch (error: any) {
       console.error('Error fetching products:', error);
       toast.error(error.message || 'Failed to fetch products.');
     } finally {
       setLoadingProducts(false);
     }
-  }, [company, searchTerm, currentPage, itemsPerPage]); // Add pagination dependencies
+  }, [company, searchTerm, currentPage, itemsPerPage]);
 
   useEffect(() => {
     if (!companyLoading && company) {
@@ -77,7 +88,6 @@ const ProductsPage: React.FC = () => {
   }, [company, companyLoading, companyError, fetchProducts]);
 
   const handleSaveProduct = (newProduct: Tables<'products'>) => {
-    // After saving, re-fetch to ensure pagination and filters are correctly applied
     fetchProducts();
     setEditingProduct(null);
     setIsFormOpen(false);
@@ -89,10 +99,7 @@ const ProductsPage: React.FC = () => {
   };
 
   const handleDeleteProduct = async (productId: string) => {
-    if (!window.confirm('Are you sure you want to delete this product?')) return;
-
-    // Optimistic UI update is tricky with pagination, so we'll just re-fetch
-    setLoadingProducts(true); // Show loading while deleting
+    setLoadingProducts(true);
     try {
       const { error } = await supabase
         .from('products')
@@ -101,11 +108,11 @@ const ProductsPage: React.FC = () => {
 
       if (error) throw error;
       toast.success('Product deleted successfully!');
-      fetchProducts(); // Re-fetch after deletion
+      fetchProducts();
     } catch (error: any) {
       console.error('Error deleting product:', error);
       toast.error(error.message || 'Failed to delete product.');
-      setLoadingProducts(false); // Hide loading on error
+      setLoadingProducts(false);
     }
   };
 
@@ -127,7 +134,7 @@ const ProductsPage: React.FC = () => {
     );
   }
 
-  if (companyError || !company?.id) { // Ensure company.id is available before rendering ProductForm
+  if (companyError || !company?.id) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">
         <h2 className="text-xl font-semibold text-red-600 mb-4">Error: {companyError || 'Company not found.'}</h2>
@@ -156,7 +163,7 @@ const ProductsPage: React.FC = () => {
             <Input
               placeholder="Search by name or description..."
               value={searchTerm}
-              onChange={(e) => setCurrentPage(1) || setSearchTerm(e.target.value)} // Reset page on search
+              onChange={(e) => setCurrentPage(1) || setSearchTerm(e.target.value)}
               className="pl-9"
             />
           </div>
@@ -193,9 +200,25 @@ const ProductsPage: React.FC = () => {
                         <Button variant="ghost" size="sm" onClick={() => handleEditProduct(product)}>
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteProduct(product.id)}>
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This action cannot be undone. This will permanently delete the product.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDeleteProduct(product.id)}>Continue</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -232,7 +255,7 @@ const ProductsPage: React.FC = () => {
         onClose={() => setIsFormOpen(false)}
         onSave={handleSaveProduct}
         initialData={editingProduct}
-        companyId={company.id} // Pass company.id here
+        companyId={company.id}
       />
     </div>
   );

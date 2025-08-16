@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -16,6 +16,7 @@ import { ArrowLeft, Edit, Printer, DollarSign, CheckCircle } from 'lucide-react'
 import PaymentForm from '@/components/PaymentForm';
 import InvoiceForm from '@/components/InvoiceForm';
 import InvoicePdfGenerator from '@/components/InvoicePdfGenerator';
+import InvoiceDisplay from '@/components/InvoiceDisplay'; // Import the new component
 
 // Extend Invoice type to include related client and invoice_items
 type InvoiceWithDetails = Tables<'invoices'> & {
@@ -34,6 +35,8 @@ const InvoiceDetailsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
   const [isEditFormOpen, setIsEditFormOpen] = useState(false);
+
+  const invoiceDisplayRef = useRef<HTMLDivElement>(null); // Ref for the InvoiceDisplay component
 
   const fetchInvoiceDetails = useCallback(async () => {
     if (!user?.id || !id) return;
@@ -165,7 +168,13 @@ const InvoiceDetailsPage: React.FC = () => {
         </Button>
         <h1 className="text-3xl font-bold">Invoice #{invoice.number || invoice.id.substring(0, 8)}</h1>
         <div className="space-x-2">
-          {company && settings && <InvoicePdfGenerator invoice={invoice} company={company} settings={settings} />}
+          {company && settings && (
+            <InvoicePdfGenerator
+              invoiceContentRef={invoiceDisplayRef}
+              invoiceNumber={invoice.number}
+              invoiceId={invoice.id}
+            />
+          )}
           <Button onClick={handleEditInvoice}>
             <Edit className="mr-2 h-4 w-4" /> Edit Invoice
           </Button>
@@ -177,6 +186,24 @@ const InvoiceDetailsPage: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {/* Invoice Display Section */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Invoice Preview</CardTitle>
+          <CardDescription>A visual representation of your invoice.</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          {company && settings && (
+            <InvoiceDisplay
+              ref={invoiceDisplayRef}
+              invoice={invoice}
+              company={company}
+              settings={settings}
+            />
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="mb-6">
         <CardHeader>

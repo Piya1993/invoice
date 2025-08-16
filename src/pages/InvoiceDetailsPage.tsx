@@ -13,6 +13,7 @@ import { useAuth } from '@/context/AuthContext';
 import { formatCurrency, fromSmallestUnit } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ArrowLeft, Edit, Printer, DollarSign } from 'lucide-react';
+import PaymentForm from '@/components/PaymentForm'; // Import PaymentForm
 
 // Extend Invoice type to include related client and invoice_items
 type InvoiceWithDetails = Tables<'invoices'> & {
@@ -27,6 +28,7 @@ const InvoiceDetailsPage: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
   const [invoice, setInvoice] = useState<InvoiceWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false); // State for payment form
 
   const fetchInvoiceDetails = useCallback(async () => {
     if (!user?.id || !id) return;
@@ -72,6 +74,16 @@ const InvoiceDetailsPage: React.FC = () => {
     }
   }, [user, authLoading, fetchInvoiceDetails]);
 
+  const handleRecordPayment = () => {
+    setIsPaymentFormOpen(true);
+  };
+
+  const handleSavePayment = (newPayment: Tables<'payments'>) => {
+    // After a payment is saved, re-fetch invoice details to update totals and payment list
+    fetchInvoiceDetails();
+    setIsPaymentFormOpen(false);
+  };
+
   if (authLoading || loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
@@ -98,7 +110,7 @@ const InvoiceDetailsPage: React.FC = () => {
           <Button onClick={() => toast.info('Edit functionality will open form.')}>
             <Edit className="mr-2 h-4 w-4" /> Edit Invoice
           </Button>
-          <Button variant="secondary" onClick={() => toast.info('Record Payment functionality coming soon!')}>
+          <Button variant="secondary" onClick={handleRecordPayment} disabled={invoice.amount_due <= 0}>
             <DollarSign className="mr-2 h-4 w-4" /> Record Payment
           </Button>
         </div>
@@ -226,6 +238,17 @@ const InvoiceDetailsPage: React.FC = () => {
           )}
         </CardContent>
       </Card>
+
+      {invoice && (
+        <PaymentForm
+          isOpen={isPaymentFormOpen}
+          onClose={() => setIsPaymentFormOpen(false)}
+          onSave={handleSavePayment}
+          invoiceId={invoice.id}
+          invoiceCurrency={invoice.currency}
+          invoiceAmountDue={invoice.amount_due}
+        />
+      )}
     </div>
   );
 };

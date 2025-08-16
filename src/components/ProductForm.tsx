@@ -17,9 +17,10 @@ interface ProductFormProps {
   onClose: () => void;
   onSave: (product: TablesInsert<'products'> | TablesUpdate<'products'>) => void;
   initialData?: TablesUpdate<'products'> | null;
+  companyId: string; // New prop
 }
 
-const ProductForm: React.FC<ProductFormProps> = ({ isOpen, onClose, onSave, initialData }) => {
+const ProductForm: React.FC<ProductFormProps> = ({ isOpen, onClose, onSave, initialData, companyId }) => {
   const { user } = useAuth();
   const [name, setName] = useState(initialData?.name || '');
   const [description, setDescription] = useState(initialData?.description || '');
@@ -47,6 +48,10 @@ const ProductForm: React.FC<ProductFormProps> = ({ isOpen, onClose, onSave, init
       toast.error('User not authenticated.');
       return;
     }
+    if (!companyId) {
+      toast.error('Company ID is missing. Please ensure your company is set up.');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -55,20 +60,8 @@ const ProductForm: React.FC<ProductFormProps> = ({ isOpen, onClose, onSave, init
         description: description || null,
         unit: unit || null,
         default_price: toSmallestUnit(defaultPrice),
-        company_id: '', // Will be set by RLS policy or server function
+        company_id: companyId, // Use the prop
       };
-
-      const { data: companyData, error: companyError } = await supabase
-        .from('companies')
-        .select('id')
-        .eq('created_by', user.id)
-        .single();
-
-      if (companyError || !companyData) {
-        throw new Error('Could not find company for the current user. Please ensure your company is set up.');
-      }
-
-      productData.company_id = companyData.id;
 
       if (initialData?.id) {
         // Update existing product

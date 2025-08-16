@@ -16,9 +16,10 @@ interface ClientFormProps {
   onClose: () => void;
   onSave: (client: TablesInsert<'clients'> | TablesUpdate<'clients'>) => void;
   initialData?: TablesUpdate<'clients'> | null;
+  companyId: string; // New prop
 }
 
-const ClientForm: React.FC<ClientFormProps> = ({ isOpen, onClose, onSave, initialData }) => {
+const ClientForm: React.FC<ClientFormProps> = ({ isOpen, onClose, onSave, initialData, companyId }) => {
   const { user } = useAuth();
   const [name, setName] = useState(initialData?.name || '');
   const [email, setEmail] = useState(initialData?.email || '');
@@ -49,6 +50,10 @@ const ClientForm: React.FC<ClientFormProps> = ({ isOpen, onClose, onSave, initia
       toast.error('User not authenticated.');
       return;
     }
+    if (!companyId) {
+      toast.error('Company ID is missing. Please ensure your company is set up.');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -58,22 +63,8 @@ const ClientForm: React.FC<ClientFormProps> = ({ isOpen, onClose, onSave, initia
         phone: phone || null,
         address: address || null,
         notes: notes || null,
-        company_id: '', // This will be set by RLS policy or a server function later
+        company_id: companyId, // Use the prop
       };
-
-      // For now, we'll fetch the company_id directly.
-      // In a more robust setup, this might be handled by a server function or a user's context.
-      const { data: companyData, error: companyError } = await supabase
-        .from('companies')
-        .select('id')
-        .eq('created_by', user.id)
-        .single();
-
-      if (companyError || !companyData) {
-        throw new Error('Could not find company for the current user. Please ensure your company is set up.');
-      }
-
-      clientData.company_id = companyData.id;
 
       if (initialData?.id) {
         // Update existing client

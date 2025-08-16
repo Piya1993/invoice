@@ -97,10 +97,10 @@ const ClientsPage: React.FC = () => {
     );
   }
 
-  if (companyError) {
+  if (companyError || !company?.id) { // Ensure company.id is available before rendering ClientForm
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">
-        <h2 className="text-xl font-semibold text-red-600 mb-4">Error: {companyError}</h2>
+        <h2 className="text-xl font-semibold text-red-600 mb-4">Error: {companyError || 'Company not found.'}</h2>
         <p className="text-muted-foreground mb-4">Please ensure your company is set up correctly in settings.</p>
         <Button onClick={() => window.location.reload()}>Retry</Button>
       </div>
@@ -162,6 +162,7 @@ const ClientsPage: React.FC = () => {
         onClose={() => setIsFormOpen(false)}
         onSave={handleSaveClient}
         initialData={editingClient}
+        companyId={company.id} // Pass company.id here
       />
     </div>
   );

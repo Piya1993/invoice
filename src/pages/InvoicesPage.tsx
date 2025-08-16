@@ -4,16 +4,18 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, Edit, Trash2, Eye } from 'lucide-react'; // Import Eye icon
+import { PlusCircle, Edit, Trash2, Eye, Search } from 'lucide-react'; // Import Search icon
 import { supabase } from '@/lib/supabase/client';
-import { Tables } from '@/types/supabase';
+import { Tables, Enums } from '@/types/supabase'; // Import Enums for invoice_status
 import { toast } from 'react-hot-toast';
 import InvoiceForm from '@/components/InvoiceForm';
 import { useAuth } from '@/context/AuthContext';
 import { formatCurrency } from '@/lib/utils';
 import { format } from 'date-fns';
-import { useNavigate } from 'react-router-dom'; // Import useNavigate
-import useCompany from '@/hooks/useCompany'; // Import the new hook
+import { useNavigate } from 'react-router-dom';
+import useCompany from '@/hooks/useCompany';
+import { Input } from '@/components/ui/input'; // Import Input for search
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // Import Select for filter
 
 // Extend Invoice type to include related client and invoice_items
 type InvoiceWithDetails = Tables<'invoices'> & {
@@ -23,12 +25,18 @@ type InvoiceWithDetails = Tables<'invoices'> & {
 
 const InvoicesPage: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
-  const { company, loading: companyLoading, error: companyError } = useCompany(); // Use the new hook
-  const navigate = useNavigate(); // Initialize useNavigate
+  const { company, loading: companyLoading, error: companyError } = useCompany();
+  const navigate = useNavigate();
   const [invoices, setInvoices] = useState<InvoiceWithDetails[]>([]);
-  const [loadingInvoices, setLoadingInvoices] = useState(true); // Renamed to avoid conflict
+  const [loadingInvoices, setLoadingInvoices] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<InvoiceWithDetails | null>(null);
+
+  // State for search and filter
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState<Enums<'invoice_status'> | 'all'>('all');
+
+  const invoiceStatuses: (Enums<'invoice_status'> | 'all')[] = ['all', 'draft', 'sent', 'paid', 'overdue', 'void'];
 
   const fetchInvoices = useCallback(async () => {
     if (!company?.id) {
@@ -38,11 +46,24 @@ const InvoicesPage: React.FC = () => {
 
     setLoadingInvoices(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('invoices')
-        .select('*, clients(*), invoice_items(*)') // Fetch related client and items
-        .eq('company_id', company.id)
-        .order('issue_date', { ascending: false });
+        .select('*, clients(*), invoice_items(*)')
+        .eq('company_id', company.id);
+
+      // Apply search term
+      if (searchTerm) {
+        query = query.or(`number.ilike.%${searchTerm}%,clients.name.ilike.%${searchTerm}%`);
+      }
+
+      // Apply status filter
+      if (filterStatus !== 'all') {
+        query = query.eq('status', filterStatus);
+      }
+
+      query = query.order('issue_date', { ascending: false });
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setInvoices(data || []);
@@ -52,7 +73,7 @@ const InvoicesPage: React.FC = () => {
     } finally {
       setLoadingInvoices(false);
     }
-  }, [company]);
+  }, [company, searchTerm, filterStatus]); // Add searchTerm and filterStatus to dependencies
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -132,6 +153,37 @@ const InvoicesPage: React.FC = () => {
         </Button>
       </div>
 
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Filter Invoices</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by invoice number or client name..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as Enums<'invoice_status'> | 'all')}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent>
+                {invoiceStatuses.map(statusOption => (
+                  <SelectItem key={statusOption} value={statusOption}>
+                    {statusOption === 'all' ? 'All Statuses' : statusOption.charAt(0).toUpperCase() + statusOption.slice(1)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Your Invoices</CardTitle>
@@ -194,7 +246,7 @@ const InvoicesPage: React.FC = () => {
         onClose={() => setIsFormOpen(false)}
         onSave={handleSaveInvoice}
         initialData={editingInvoice}
-        companyId={company.id} // Pass company.id here
+        companyId={company.id}
       />
     </div>
   );

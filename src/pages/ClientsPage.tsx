@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, Edit, Trash2, Search } from 'lucide-react'; // Import Search icon
+import { PlusCircle, Edit, Trash2, Search, ChevronLeft, ChevronRight } from 'lucide-react'; // Import pagination icons
 import { supabase } from '@/lib/supabase/client';
 import { Tables } from '@/types/supabase';
 import { toast } from 'react-hot-toast';
@@ -24,6 +24,11 @@ const ClientsPage: React.FC = () => {
   // State for search term
   const [searchTerm, setSearchTerm] = useState('');
 
+  // State for pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10); // You can make this configurable
+  const [totalCount, setTotalCount] = useState(0);
+
   const fetchClients = useCallback(async () => {
     if (!company?.id) {
       setLoadingClients(false);
@@ -32,9 +37,12 @@ const ClientsPage: React.FC = () => {
 
     setLoadingClients(true);
     try {
+      const from = (currentPage - 1) * itemsPerPage;
+      const to = from + itemsPerPage - 1;
+
       let query = supabase
         .from('clients')
-        .select('*')
+        .select('*', { count: 'exact' }) // Request exact count
         .eq('company_id', company.id);
 
       // Apply search term
@@ -42,19 +50,21 @@ const ClientsPage: React.FC = () => {
         query = query.or(`name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`);
       }
 
-      query = query.order('name', { ascending: true });
+      query = query.order('name', { ascending: true })
+                   .range(from, to); // Apply pagination range
 
-      const { data, error } = await query;
+      const { data, error, count } = await query;
 
       if (error) throw error;
       setClients(data || []);
+      setTotalCount(count || 0); // Set the total count
     } catch (error: any) {
       console.error('Error fetching clients:', error);
       toast.error(error.message || 'Failed to fetch clients.');
     } finally {
       setLoadingClients(false);
     }
-  }, [company, searchTerm]); // Add searchTerm to dependencies
+  }, [company, searchTerm, currentPage, itemsPerPage]); // Add pagination dependencies
 
   useEffect(() => {
     if (!companyLoading && company) {
@@ -66,11 +76,8 @@ const ClientsPage: React.FC = () => {
   }, [company, companyLoading, companyError, fetchClients]);
 
   const handleSaveClient = (newClient: Tables<'clients'>) => {
-    if (editingClient) {
-      setClients(clients.map((client) => (client.id === newClient.id ? newClient : client)));
-    } else {
-      setClients([...clients, newClient]);
-    }
+    // After saving, re-fetch to ensure pagination and filters are correctly applied
+    fetchClients();
     setEditingClient(null);
     setIsFormOpen(false);
   };
@@ -83,9 +90,8 @@ const ClientsPage: React.FC = () => {
   const handleDeleteClient = async (clientId: string) => {
     if (!window.confirm('Are you sure you want to delete this client?')) return;
 
-    const originalClients = [...clients];
-    setClients(clients.filter((client) => client.id !== clientId)); // Optimistic UI
-
+    // Optimistic UI update is tricky with pagination, so we'll just re-fetch
+    setLoadingClients(true); // Show loading while deleting
     try {
       const { error } = await supabase
         .from('clients')
@@ -94,11 +100,22 @@ const ClientsPage: React.FC = () => {
 
       if (error) throw error;
       toast.success('Client deleted successfully!');
+      fetchClients(); // Re-fetch after deletion
     } catch (error: any) {
       console.error('Error deleting client:', error);
       toast.error(error.message || 'Failed to delete client.');
-      setClients(originalClients); // Revert on error
+      setLoadingClients(false); // Hide loading on error
     }
+  };
+
+  const totalPages = Math.ceil(totalCount / itemsPerPage);
+
+  const handlePreviousPage = () => {
+    setCurrentPage(prev => Math.max(1, prev - 1));
+  };
+
+  const handleNextPage = () => {
+    setCurrentPage(prev => Math.min(totalPages, prev + 1));
   };
 
   if (companyLoading || loadingClients) {
@@ -138,7 +155,7 @@ const ClientsPage: React.FC = () => {
             <Input
               placeholder="Search by name, email, or phone..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => setCurrentPage(1) || setSearchTerm(e.target.value)} // Reset page on search
               className="pl-9"
             />
           </div>
@@ -153,35 +170,58 @@ const ClientsPage: React.FC = () => {
           {clients.length === 0 ? (
             <p className="text-muted-foreground text-center py-8">No clients found. Add your first client!</p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Address</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {clients.map((client) => (
-                  <TableRow key={client.id}>
-                    <TableCell className="font-medium">{client.name}</TableCell>
-                    <TableCell>{client.email}</TableCell>
-                    <TableCell>{client.phone}</TableCell>
-                    <TableCell>{client.address}</TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" onClick={() => handleEditClient(client)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDeleteClient(client.id)}>
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </Button>
-                    </TableCell>
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Phone</TableHead>
+                    <TableHead>Address</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {clients.map((client) => (
+                    <TableRow key={client.id}>
+                      <TableCell className="font-medium">{client.name}</TableCell>
+                      <TableCell>{client.email}</TableCell>
+                      <TableCell>{client.phone}</TableCell>
+                      <TableCell>{client.address}</TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="sm" onClick={() => handleEditClient(client)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleDeleteClient(client.id)}>
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {totalPages > 1 && (
+                <div className="flex justify-between items-center mt-4">
+                  <Button
+                    variant="outline"
+                    onClick={handlePreviousPage}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-2" /> Previous
+                  </Button>
+                  <span className="text-sm text-muted-foreground">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    onClick={handleNextPage}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next <ChevronRight className="h-4 w-4 ml-2" />
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

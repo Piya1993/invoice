@@ -5,8 +5,9 @@ import { useAuth } from '@/context/AuthContext';
 import useCompanySettings from '@/hooks/useCompanySettings';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { User, Building, KeyRound } from 'lucide-react';
+import { User, Building } from 'lucide-react';
 import { Link } from 'react-router-dom'; // Import Link for navigation
+import UpdatePasswordForm from '@/components/UpdatePasswordForm'; // Import the new component
 
 const ProfilePage: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
@@ -53,27 +54,7 @@ const ProfilePage: React.FC = () => {
         </CardContent>
       </Card>
 
-      <Card className="max-w-lg mx-auto">
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <KeyRound className="mr-2 h-5 w-5" /> Change Password
-          </CardTitle>
-          <CardDescription>
-            For security reasons, password changes are handled through a secure reset process.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground mb-4">
-            If you wish to change your password, please use the password reset flow.
-            This ensures your account remains secure.
-          </p>
-          <Link to="/reset-password">
-            <Button className="w-full">
-              Go to Password Reset
-            </Button>
-          </Link>
-        </CardContent>
-      </Card>
+      <UpdatePasswordForm /> {/* Use the new password update form here */}
     </div>
   );
 };

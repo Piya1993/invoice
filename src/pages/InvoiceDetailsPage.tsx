@@ -18,6 +18,7 @@ import InvoiceForm from '@/components/InvoiceForm';
 import InvoicePdfGenerator from '@/components/InvoicePdfGenerator';
 import InvoiceDisplay from '@/components/InvoiceDisplay'; // Import the new component
 import Decimal from 'decimal.js'; // Import Decimal
+import useCompany from '@/hooks/useCompany'; // Import the new hook
 
 // Extend Invoice type to include related client and invoice_items
 type InvoiceWithDetails = Tables<'invoices'> & {
@@ -30,37 +31,26 @@ const InvoiceDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
+  const { company, loading: companyLoading, error: companyError } = useCompany(); // Use the new hook
   const [invoice, setInvoice] = useState<InvoiceWithDetails | null>(null);
-  const [company, setCompany] = useState<Tables<'companies'> | null>(null);
   const [settings, setSettings] = useState<Tables<'settings'> | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
-  const [isEditFormOpen, setIsEditFormOpen] = useState(false);
+  const [loadingInvoiceDetails, setLoadingInvoiceDetails] = useState(true); // Renamed to avoid conflict
 
   const invoiceDisplayRef = useRef<HTMLDivElement>(null); // Ref for the InvoiceDisplay component
 
   const fetchInvoiceDetails = useCallback(async () => {
-    if (!user?.id || !id) return;
+    if (!user?.id || !id || !company?.id) {
+      setLoadingInvoiceDetails(false);
+      return;
+    }
 
-    setLoading(true);
+    setLoadingInvoiceDetails(true);
     try {
-      // Fetch company data
-      const { data: companyData, error: companyError } = await supabase
-        .from('companies')
-        .select('*')
-        .eq('created_by', user.id)
-        .single();
-
-      if (companyError || !companyData) {
-        throw new Error('Could not find company for the current user. Please ensure your company is set up.');
-      }
-      setCompany(companyData);
-
       // Fetch settings data for the company
       const { data: settingsData, error: settingsError } = await supabase
         .from('settings')
         .select('*')
-        .eq('company_id', companyData.id)
+        .eq('company_id', company.id)
         .single();
 
       if (settingsError && settingsError.code !== 'PGRST116') { // PGRST116 means no rows found
@@ -73,7 +63,7 @@ const InvoiceDetailsPage: React.FC = () => {
         .from('invoices')
         .select('*, clients(*), invoice_items(*), payments(*)')
         .eq('id', id)
-        .eq('company_id', companyData.id)
+        .eq('company_id', company.id)
         .single();
 
       if (error) throw error;
@@ -88,15 +78,21 @@ const InvoiceDetailsPage: React.FC = () => {
       toast.error(error.message || 'Failed to fetch invoice details.');
       navigate('/invoices');
     } finally {
-      setLoading(false);
+      setLoadingInvoiceDetails(false);
     }
-  }, [user, id, navigate]);
+  }, [user, id, company, navigate]);
 
   useEffect(() => {
-    if (!authLoading && user) {
-      fetchInvoiceDetails();
+    if (!authLoading && user && !companyLoading) {
+      if (company) {
+        fetchInvoiceDetails();
+      } else if (companyError) {
+        toast.error(companyError);
+        setLoadingInvoiceDetails(false);
+        navigate('/setup-company'); // Redirect if company not found
+      }
     }
-  }, [user, authLoading, fetchInvoiceDetails]);
+  }, [user, authLoading, company, companyLoading, companyError, navigate, fetchInvoiceDetails]);
 
   const handleRecordPayment = () => {
     setIsPaymentFormOpen(true);
@@ -123,7 +119,7 @@ const InvoiceDetailsPage: React.FC = () => {
       return;
     }
 
-    setLoading(true);
+    setLoadingInvoiceDetails(true);
     try {
       const { data, error } = await supabase
         .from('invoices')
@@ -143,14 +139,24 @@ const InvoiceDetailsPage: React.FC = () => {
       console.error('Error marking invoice as paid:', error);
       toast.error(error.message || 'Failed to mark invoice as paid.');
     } finally {
-      setLoading(false);
+      setLoadingInvoiceDetails(false);
     }
   };
 
-  if (authLoading || loading) {
+  if (authLoading || companyLoading || loadingInvoiceDetails) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <p>Loading invoice details...</p>
+      </div>
+    );
+  }
+
+  if (companyError || !company?.id) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">
+        <h2 className="text-xl font-semibold text-red-600 mb-4">Error: {companyError || 'Company not found.'}</h2>
+        <p className="text-muted-foreground mb-4">Please ensure your company is set up correctly in settings.</p>
+        <Button onClick={() => navigate('/setup-company')}>Go to Company Setup</Button>
       </div>
     );
   }
@@ -337,7 +343,7 @@ const InvoiceDetailsPage: React.FC = () => {
         </CardContent>
       </Card>
 
-      {invoice && (
+      {invoice && company && ( // Ensure company is available before rendering forms
         <>
           <PaymentForm
             isOpen={isPaymentFormOpen}
@@ -346,12 +352,14 @@ const InvoiceDetailsPage: React.FC = () => {
             invoiceId={invoice.id}
             invoiceCurrency={invoice.currency}
             invoiceAmountDue={invoice.amount_due}
+            companyId={company.id} // Pass company.id here
           />
           <InvoiceForm
             isOpen={isEditFormOpen}
             onClose={() => setIsEditFormOpen(false)}
             onSave={handleSaveInvoice}
             initialData={invoice}
+            companyId={company.id} // Pass company.id here
           />
         </>
       )}

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom'; // Corrected import
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'react-hot-toast';
@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency, fromSmallestUnit } from '@/lib/utils';
 import Decimal from 'decimal.js';
-import { DollarSign, FileText, TrendingUp, Wallet, Clock } from 'lucide-react';
+import { DollarSign, FileText, TrendingUp, Wallet, Clock, PlusCircle, Users, Package } from 'lucide-react'; // Added PlusCircle, Users, Package
 import { Tables } from '@/types/supabase';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
@@ -22,7 +22,7 @@ type InvoiceWithClient = Tables<'invoices'> & {
 
 const Dashboard: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
-  const router = useRouter();
+  const navigate = useNavigate(); // Corrected hook
   const [loading, setLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState({
     totalInvoices: 0,
@@ -102,11 +102,11 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     if (!user && !authLoading) {
-      router.push('/auth');
+      navigate('/auth');
     } else if (user && !authLoading) {
       fetchDashboardData();
     }
-  }, [user, authLoading, router, fetchDashboardData]);
+  }, [user, authLoading, navigate, fetchDashboardData]);
 
   const handleSignOut = async () => {
     const { error } = await supabase.auth.signOut();
@@ -185,6 +185,27 @@ const Dashboard: React.FC = () => {
             </p>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="mb-8">
+        <h2 className="text-2xl font-bold mb-4">Quick Actions</h2>
+        <div className="flex flex-wrap gap-4">
+          <Link to="/invoices">
+            <Button size="lg">
+              <PlusCircle className="mr-2 h-5 w-5" /> Create New Invoice
+            </Button>
+          </Link>
+          <Link to="/clients">
+            <Button size="lg" variant="outline">
+              <Users className="mr-2 h-5 w-5" /> Add New Client
+            </Button>
+          </Link>
+          <Link to="/products">
+            <Button size="lg" variant="outline">
+              <Package className="mr-2 h-5 w-5" /> Add New Product
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

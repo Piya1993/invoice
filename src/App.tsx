@@ -11,6 +11,7 @@ import ClientsPage from '@/pages/ClientsPage';
 import ProductsPage from '@/pages/ProductsPage';
 import ReportsPage from '@/pages/ReportsPage';
 import SettingsPage from '@/pages/SettingsPage';
+import InvoiceDetailsPage from '@/pages/InvoiceDetailsPage'; // Import the new page
 import Layout from '@/components/Layout';
 import { Toaster } from 'react-hot-toast';
 
@@ -26,6 +27,7 @@ function App() {
           <Route element={<Layout />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/invoices" element={<InvoicesPage />} />
+            <Route path="/invoices/:id" element={<InvoiceDetailsPage />} /> {/* New route for invoice details */}
             <Route path="/clients" element={<ClientsPage />} />
             <Route path="/products" element={<ProductsPage />} />
             <Route path="/reports" element={<ReportsPage />} />

@@ -4,14 +4,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, Edit, Trash2 } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Eye } from 'lucide-react'; // Import Eye icon
 import { supabase } from '@/lib/supabase/client';
 import { Tables } from '@/types/supabase';
 import { toast } from 'react-hot-toast';
-import InvoiceForm from '@/components/InvoiceForm'; // Import the new form
+import InvoiceForm from '@/components/InvoiceForm';
 import { useAuth } from '@/context/AuthContext';
 import { formatCurrency } from '@/lib/utils';
 import { format } from 'date-fns';
+import { useNavigate } from 'react-router-dom'; // Import useNavigate
 
 // Extend Invoice type to include related client and invoice_items
 type InvoiceWithDetails = Tables<'invoices'> & {
@@ -21,6 +22,7 @@ type InvoiceWithDetails = Tables<'invoices'> & {
 
 const InvoicesPage: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
+  const navigate = useNavigate(); // Initialize useNavigate
   const [invoices, setInvoices] = useState<InvoiceWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -85,8 +87,6 @@ const InvoicesPage: React.FC = () => {
     setInvoices(invoices.filter((invoice) => invoice.id !== invoiceId)); // Optimistic UI
 
     try {
-      // Supabase RLS should handle cascading deletes if set up, otherwise delete items first
-      // For now, assuming RLS or database foreign key constraints handle invoice_items and payments
       const { error } = await supabase
         .from('invoices')
         .delete()
@@ -99,6 +99,10 @@ const InvoicesPage: React.FC = () => {
       toast.error(error.message || 'Failed to delete invoice.');
       setInvoices(originalInvoices); // Revert on error
     }
+  };
+
+  const handleViewInvoice = (invoiceId: string) => {
+    navigate(`/invoices/${invoiceId}`);
   };
 
   if (authLoading || loading) {
@@ -157,6 +161,9 @@ const InvoicesPage: React.FC = () => {
                       </span>
                     </TableCell>
                     <TableCell className="text-right">
+                      <Button variant="ghost" size="sm" onClick={() => handleViewInvoice(invoice.id)}>
+                        <Eye className="h-4 w-4" />
+                      </Button>
                       <Button variant="ghost" size="sm" onClick={() => handleEditInvoice(invoice)}>
                         <Edit className="h-4 w-4" />
                       </Button>

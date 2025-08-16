@@ -13,15 +13,15 @@ const CompanySetupPage: React.FC = () => {
   const navigate = useNavigate();
   const [company, setCompany] = useState<Tables<'companies'> | null>(null);
   const [settings, setSettings] = useState<Tables<'settings'> | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingData, setLoadingData] = useState(true); // Renamed to avoid conflict with authLoading
 
   const fetchCompanyAndSettings = useCallback(async () => {
     if (!user?.id) {
-      setLoading(false);
+      setLoadingData(false);
       return;
     }
 
-    setLoading(true);
+    setLoadingData(true);
     try {
       const { data: companyData, error: companyError } = await supabase
         .from('companies')
@@ -29,28 +29,35 @@ const CompanySetupPage: React.FC = () => {
         .eq('created_by', user.id)
         .single();
 
-      if (companyError) throw companyError;
-      setCompany(companyData);
-
-      const { data: settingsData, error: settingsError } = await supabase
-        .from('settings')
-        .select('*')
-        .eq('company_id', companyData.id)
-        .single();
-
-      if (settingsError && settingsError.code !== 'PGRST116') {
-        throw settingsError;
+      if (companyError && companyError.code !== 'PGRST116') { // PGRST116 means no rows found
+        throw companyError;
       }
-      setSettings(settingsData);
+      setCompany(companyData); // companyData will be null if no company found
+
+      if (companyData) {
+        const { data: settingsData, error: settingsError } = await supabase
+          .from('settings')
+          .select('*')
+          .eq('company_id', companyData.id)
+          .single();
+
+        if (settingsError && settingsError.code !== 'PGRST116') {
+          throw settingsError;
+        }
+        setSettings(settingsData); // settingsData will be null if no settings found
+      } else {
+        setSettings(null); // Ensure settings is null if no company
+      }
 
     } catch (error: any) {
       console.error('Error fetching company/settings for setup:', error);
       toast.error(error.message || 'Failed to load company setup data.');
-      navigate('/dashboard'); // Fallback to dashboard on critical error
+      // If there's a critical error fetching, we might still want to allow setup
+      // but for now, let's just log and proceed with null data.
     } finally {
-      setLoading(false);
+      setLoadingData(false);
     }
-  }, [user, navigate]);
+  }, [user]);
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -63,17 +70,11 @@ const CompanySetupPage: React.FC = () => {
   const handleSave = (updatedCompany: Tables<'companies'>, updatedSettings: Tables<'settings'>) => {
     setCompany(updatedCompany);
     setSettings(updatedSettings);
-    // After saving, check if the company name is no longer the default
-    const defaultCompanyNamePattern = new RegExp(`^${user?.email?.split('@')[0]}'s Company$`);
-    if (updatedCompany.name && !defaultCompanyNamePattern.test(updatedCompany.name)) {
-      toast.success('Company setup complete! Redirecting to dashboard.');
-      navigate('/dashboard');
-    } else {
-      toast.info('Please update your company name to complete setup.');
-    }
+    toast.success('Company setup complete! Redirecting to dashboard.');
+    navigate('/dashboard');
   };
 
-  if (authLoading || loading) {
+  if (authLoading || loadingData) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <p>Loading setup...</p>
@@ -93,7 +94,7 @@ const CompanySetupPage: React.FC = () => {
         onSave={handleSave}
         initialCompanyData={company}
         initialSettingsData={settings}
-        isInitialSetup={true} // Pass this prop
+        isInitialSetup={!company} // Pass true if no company exists yet
       />
     </div>
   );

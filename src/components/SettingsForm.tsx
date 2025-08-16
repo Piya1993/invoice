@@ -70,51 +70,62 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
       toast.error('User not authenticated.');
       return;
     }
-    if (isInitialSetup && !companyName.trim()) {
-      toast.error('Company Name is required for initial setup.');
+    if (!companyName.trim()) {
+      toast.error('Company Name is required.');
       return;
     }
 
     setLoading(true);
     try {
-      // Fetch company_id
-      const { data: companyData, error: companyError } = await supabase
-        .from('companies')
-        .select('id')
-        .eq('created_by', user.id)
-        .single();
+      let currentCompanyId: string;
+      let savedCompany: Tables<'companies'>;
 
-      if (companyError || !companyData) {
-        throw new Error('Could not find company for the current user. Please ensure your company is set up.');
+      if (initialCompanyData?.id) {
+        // Update existing company
+        const companyUpdate: TablesUpdate<'companies'> = {
+          name: companyName,
+          logo_url: companyLogoUrl || null,
+          address: companyAddress || null,
+          phone: companyPhone || null,
+          tax_id: companyTaxId || null,
+          currency: companyCurrency,
+        };
+        const { data, error } = await supabase
+          .from('companies')
+          .update(companyUpdate)
+          .eq('id', initialCompanyData.id)
+          .select()
+          .single();
+        if (error) throw error;
+        savedCompany = data;
+        currentCompanyId = data.id;
+      } else {
+        // Create new company
+        const companyInsert: TablesInsert<'companies'> = {
+          name: companyName,
+          logo_url: companyLogoUrl || null,
+          address: companyAddress || null,
+          phone: companyPhone || null,
+          tax_id: companyTaxId || null,
+          currency: companyCurrency,
+          created_by: user.id,
+        };
+        const { data, error } = await supabase
+          .from('companies')
+          .insert(companyInsert)
+          .select()
+          .single();
+        if (error) throw error;
+        savedCompany = data;
+        currentCompanyId = data.id;
       }
-      const companyId = companyData.id;
-
-      // Prepare company update data
-      const companyUpdate: TablesUpdate<'companies'> = {
-        name: companyName,
-        logo_url: companyLogoUrl || null,
-        address: companyAddress || null,
-        phone: companyPhone || null,
-        tax_id: companyTaxId || null,
-        currency: companyCurrency,
-      };
-
-      // Update company table
-      const { data: updatedCompany, error: updateCompanyError } = await supabase
-        .from('companies')
-        .update(companyUpdate)
-        .eq('id', companyId)
-        .select()
-        .single();
-
-      if (updateCompanyError) throw updateCompanyError;
 
       // Prepare settings upsert data
       const settingsUpsert: TablesInsert<'settings'> = {
-        company_id: companyId,
-        logo_url: companyLogoUrl || null, // Duplicated, but settings table also has it
+        company_id: currentCompanyId,
+        logo_url: companyLogoUrl || null,
         default_tax_rate: parseFloat(defaultTaxRate),
-        default_currency: companyCurrency, // Duplicated, but settings table also has it
+        default_currency: companyCurrency,
         numbering_prefix: numberingPrefix,
         next_number: parseInt(nextNumber),
         locale: locale,
@@ -128,7 +139,7 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
         const { data: updatedSettings, error: updateSettingsError } = await supabase
           .from('settings')
           .update(settingsUpsert as TablesUpdate<'settings'>)
-          .eq('company_id', companyId)
+          .eq('company_id', currentCompanyId)
           .select()
           .single();
         if (updateSettingsError) throw updateSettingsError;
@@ -144,9 +155,10 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
         savedSettings = newSettings;
       }
 
-      onSave(updatedCompany, savedSettings);
-      toast.success('Settings updated successfully!');
-      if (!isInitialSetup) { // Only close if not initial setup page
+      onSave(savedCompany, savedSettings);
+      toast.success('Settings saved successfully!');
+      // onClose is handled by the parent CompanySetupPage for initial setup
+      if (!isInitialSetup) {
         onClose();
       }
     } catch (error: any) {

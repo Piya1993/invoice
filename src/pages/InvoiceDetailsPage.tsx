@@ -17,6 +17,7 @@ import PaymentForm from '@/components/PaymentForm';
 import InvoiceForm from '@/components/InvoiceForm';
 import InvoicePdfGenerator from '@/components/InvoicePdfGenerator';
 import InvoiceDisplay from '@/components/InvoiceDisplay'; // Import the new component
+import Decimal from 'decimal.js'; // Import Decimal
 
 // Extend Invoice type to include related client and invoice_items
 type InvoiceWithDetails = Tables<'invoices'> & {
@@ -111,7 +112,7 @@ const InvoiceDetailsPage: React.FC = () => {
   };
 
   const handleSaveInvoice = (updatedInvoice: InvoiceWithDetails) => {
-    fetchInvoiceDetails(); // Re-fetch invoice details to update all fields
+    fetchInvoiceDetails(); // Re-fetch to update all fields
     setIsEditFormOpen(false);
   };
 
@@ -258,21 +259,29 @@ const InvoiceDetailsPage: React.FC = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {invoice.invoice_items.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-medium">{item.title}</TableCell>
-                    <TableCell>{item.qty}</TableCell>
-                    <TableCell>{formatCurrency(item.unit_price, invoice.currency)}</TableCell>
-                    <TableCell>{item.tax_rate}%</TableCell>
-                    <TableCell>{formatCurrency(item.discount, invoice.currency)}</TableCell>
-                    <TableCell className="text-right">
-                      {formatCurrency(
-                        (fromSmallestUnit(item.qty * item.unit_price) * (1 + item.tax_rate / 100)) - fromSmallestUnit(item.discount),
-                        invoice.currency
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {invoice.invoice_items.map((item) => {
+                  const qty = new Decimal(item.qty || 0);
+                  const unitPrice = new Decimal(item.unit_price || 0); // Already in smallest unit
+                  const taxRate = new Decimal(item.tax_rate || 0).dividedBy(100);
+                  const discount = new Decimal(item.discount || 0); // Already in smallest unit
+
+                  const lineTotalBeforeTax = qty.times(unitPrice);
+                  const lineTax = lineTotalBeforeTax.times(taxRate);
+                  const lineTotal = lineTotalBeforeTax.plus(lineTax).minus(discount);
+
+                  return (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">{item.title}</TableCell>
+                      <TableCell>{item.qty}</TableCell>
+                      <TableCell>{formatCurrency(item.unit_price, invoice.currency)}</TableCell>
+                      <TableCell>{item.tax_rate}%</TableCell>
+                      <TableCell>{formatCurrency(item.discount, invoice.currency)}</TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(lineTotal.toNumber(), invoice.currency)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}

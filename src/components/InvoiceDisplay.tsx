@@ -5,6 +5,7 @@ import { Tables } from '@/types/supabase';
 import { formatCurrency, fromSmallestUnit } from '@/lib/utils';
 import { format } from 'date-fns';
 import { useAuth } from '@/context/AuthContext'; // To get user email for company info
+import Decimal from 'decimal.js'; // Import Decimal
 
 // Extend Invoice type to include related client and invoice_items
 type InvoiceWithDetails = Tables<'invoices'> & {
@@ -78,21 +79,29 @@ const InvoiceDisplay = forwardRef<HTMLDivElement, InvoiceDisplayProps>(
               </tr>
             </thead>
             <tbody>
-              {invoice.invoice_items.map((item) => (
-                <tr key={item.id} className="border-b border-gray-100">
-                  <td className="py-2 px-4 text-sm">{item.title}</td>
-                  <td className="py-2 px-4 text-sm">{item.qty}</td>
-                  <td className="py-2 px-4 text-right text-sm">{formatCurrency(item.unit_price, invoice.currency)}</td>
-                  <td className="py-2 px-4 text-right text-sm">{item.tax_rate}%</td>
-                  <td className="py-2 px-4 text-right text-sm">{formatCurrency(item.discount, invoice.currency)}</td>
-                  <td className="py-2 px-4 text-right text-sm">
-                    {formatCurrency(
-                      (new Decimal(fromSmallestUnit(item.qty)).times(fromSmallestUnit(item.unit_price)).times(new Decimal(1).plus(new Decimal(item.tax_rate || 0).dividedBy(100)))).minus(fromSmallestUnit(item.discount || 0)),
-                      invoice.currency
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {invoice.invoice_items.map((item) => {
+                const qty = new Decimal(item.qty || 0);
+                const unitPrice = new Decimal(item.unit_price || 0); // Already in smallest unit
+                const taxRate = new Decimal(item.tax_rate || 0).dividedBy(100);
+                const discount = new Decimal(item.discount || 0); // Already in smallest unit
+
+                const lineTotalBeforeTax = qty.times(unitPrice);
+                const lineTax = lineTotalBeforeTax.times(taxRate);
+                const lineTotal = lineTotalBeforeTax.plus(lineTax).minus(discount);
+
+                return (
+                  <tr key={item.id} className="border-b border-gray-100">
+                    <td className="py-2 px-4 text-sm">{item.title}</td>
+                    <td className="py-2 px-4 text-sm">{item.qty}</td>
+                    <td className="py-2 px-4 text-right text-sm">{formatCurrency(item.unit_price, invoice.currency)}</td>
+                    <td className="py-2 px-4 text-right text-sm">{item.tax_rate}%</td>
+                    <td className="py-2 px-4 text-right text-sm">{formatCurrency(item.discount, invoice.currency)}</td>
+                    <td className="py-2 px-4 text-right text-sm">
+                      {formatCurrency(lineTotal.toNumber(), invoice.currency)}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

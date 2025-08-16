@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } = '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -45,7 +45,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
   const [terms, setTerms] = useState(initialData?.terms || '');
   const [invoiceItems, setInvoiceItems] = useState<FormInvoiceItem[]>([]);
 
-  // Calculated totals
+  // Calculated totals (stored in smallest unit)
   const [subtotal, setSubtotal] = useState(0);
   const [taxTotal, setTaxTotal] = useState(0);
   const [discountTotal, setDiscountTotal] = useState(0);
@@ -160,25 +160,26 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
 
     invoiceItems.forEach(item => {
       const qty = new Decimal(item.qty || 0);
-      const unitPrice = new Decimal(fromSmallestUnit(item.unit_price || 0));
+      const unitPriceInSmallestUnit = new Decimal(item.unit_price || 0); // Keep in smallest unit
       const taxRate = new Decimal(item.tax_rate || 0).dividedBy(100); // Convert percentage to decimal
-      const discount = new Decimal(fromSmallestUnit(item.discount || 0));
+      const discountInSmallestUnit = new Decimal(item.discount || 0); // Keep in smallest unit
 
-      const lineTotalBeforeTax = qty.times(unitPrice);
-      const lineTax = lineTotalBeforeTax.times(taxRate);
-      const lineDiscount = discount; // Assuming discount is a fixed amount per item
+      const lineTotalBeforeTaxInSmallestUnit = qty.times(unitPriceInSmallestUnit);
+      const lineTaxInSmallestUnit = lineTotalBeforeTaxInSmallestUnit.times(taxRate);
+      const lineDiscountInSmallestUnit = discountInSmallestUnit;
 
-      currentSubtotal = currentSubtotal.plus(lineTotalBeforeTax);
-      currentTaxTotal = currentTaxTotal.plus(lineTax);
-      currentDiscountTotal = currentDiscountTotal.plus(lineDiscount);
+      currentSubtotal = currentSubtotal.plus(lineTotalBeforeTaxInSmallestUnit);
+      currentTaxTotal = currentTaxTotal.plus(lineTaxInSmallestUnit);
+      currentDiscountTotal = currentDiscountTotal.plus(lineDiscountInSmallestUnit);
     });
 
     const currentTotal = currentSubtotal.plus(currentTaxTotal).minus(currentDiscountTotal);
 
-    setSubtotal(toSmallestUnit(currentSubtotal));
-    setTaxTotal(toSmallestUnit(currentTaxTotal));
-    setDiscountTotal(toSmallestUnit(currentDiscountTotal));
-    setTotal(toSmallestUnit(currentTotal));
+    // Store results as numbers (which Decimal.js can convert to)
+    setSubtotal(currentSubtotal.toNumber());
+    setTaxTotal(currentTaxTotal.toNumber());
+    setDiscountTotal(currentDiscountTotal.toNumber());
+    setTotal(currentTotal.toNumber());
   }, [invoiceItems]);
 
   useEffect(() => {
@@ -219,9 +220,13 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
               tax_rate: companySettings?.default_tax_rate || 0, // Set default tax rate when product is selected
             };
           }
-          if (field === 'qty' || field === 'unit_price' || field === 'tax_rate' || field === 'discount') {
-            // Convert to number for calculations
+          if (field === 'qty' || field === 'tax_rate') {
+            // These are numbers directly
             return { ...item, [field]: parseFloat(value) || 0 };
+          }
+          if (field === 'unit_price' || field === 'discount') {
+            // Convert to smallest unit for storage
+            return { ...item, [field]: toSmallestUnit(value) };
           }
           return { ...item, [field]: value };
         }
@@ -554,7 +559,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
                     type="number"
                     step="0.01"
                     value={fromSmallestUnit(item.unit_price)}
-                    onChange={(e) => handleItemChange(item.tempId, 'unit_price', toSmallestUnit(e.target.value))}
+                    onChange={(e) => handleItemChange(item.tempId, 'unit_price', e.target.value)}
                     min="0"
                     required
                     disabled={loading}
@@ -580,7 +585,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
                     type="number"
                     step="0.01"
                     value={fromSmallestUnit(item.discount)}
-                    onChange={(e) => handleItemChange(item.tempId, 'discount', toSmallestUnit(e.target.value))}
+                    onChange={(e) => handleItemChange(item.tempId, 'discount', e.target.value)}
                     min="0"
                     disabled={loading}
                   />

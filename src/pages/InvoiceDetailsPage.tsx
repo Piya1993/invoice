@@ -302,9 +302,9 @@ const InvoiceDetailsPage: React.FC = () => {
               <TableBody>
                 {invoice.invoice_items.map((item) => {
                   const qty = new Decimal(item.qty || 0);
-                  const unitPrice = new Decimal(item.unit_price || 0);
+                  const unitPrice = new Decimal(item.unit_price || 0); // Already in smallest unit
                   const taxRate = new Decimal(item.tax_rate || 0).dividedBy(100);
-                  const discount = new Decimal(item.discount || 0);
+                  const discount = new Decimal(item.discount || 0); // Already in smallest unit
 
                   const lineTotalBeforeTax = qty.times(unitPrice);
                   const lineTax = lineTotalBeforeTax.times(taxRate);
@@ -394,6 +394,7 @@ const InvoiceDetailsPage: React.FC = () => {
             onSave={handleSaveInvoice}
             initialData={invoice}
             companyId={company.id}
+            refetchCompanySettings={refetchCompanySettings}
           />
         </>
       )}

@@ -27,7 +27,7 @@ type InvoiceWithDetails = Tables<'invoices'> & {
 
 const InvoicesPage: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
-  const { company, loading: companySettingsLoading, error: companySettingsError } = useCompanySettings();
+  const { company, loading: companySettingsLoading, error: companySettingsError, refetch: refetchCompanySettings } = useCompanySettings();
   const navigate = useNavigate();
   const [invoices, setInvoices] = useState<InvoiceWithDetails[]>([]);
   const [loadingInvoices, setLoadingInvoices] = useState(true);
@@ -294,6 +294,7 @@ const InvoicesPage: React.FC = () => {
         onSave={handleSaveInvoice}
         initialData={editingInvoice}
         companyId={company.id}
+        refetchCompanySettings={refetchCompanySettings}
       />
     </div>
   );

@@ -28,9 +28,10 @@ interface InvoiceFormProps {
   onSave: (invoice: Tables<'invoices'> & { invoice_items: Tables<'invoice_items'>[] }) => void;
   initialData?: (Tables<'invoices'> & { invoice_items: Tables<'invoice_items'>[] }) | null;
   companyId: string; // New prop
+  refetchCompanySettings: () => void; // New prop
 }
 
-const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, initialData, companyId }) => {
+const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, initialData, companyId, refetchCompanySettings }) => {
   const { user } = useAuth();
   const { company, settings: companySettings, loading: companySettingsLoading, error: companySettingsError } = useCompanySettings(); // Use the new hook
   const [loading, setLoading] = useState(false);
@@ -357,6 +358,9 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ isOpen, onClose, onSave, init
           if (updateSettingsError) {
             console.error('Error incrementing next_number:', updateSettingsError);
             toast.error('Failed to update next invoice number in settings.');
+          } else {
+            // IMPORTANT: Refetch company settings to update the next_number in state
+            refetchCompanySettings();
           }
         }
       }

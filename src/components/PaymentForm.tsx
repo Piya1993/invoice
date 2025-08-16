@@ -87,10 +87,10 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
 
       if (paymentError) throw paymentError;
 
-      // Now, fetch the current state of the invoice to update its totals
+      // Now, fetch the current state of the invoice to update its totals and status
       const { data: currentInvoice, error: fetchInvoiceError } = await supabase
         .from('invoices')
-        .select('total, amount_paid, due_date')
+        .select('total, amount_paid, due_date, status') // Fetch current status
         .eq('id', invoiceId)
         .single();
 
@@ -101,14 +101,16 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
       const newTotalPaid = new Decimal(currentInvoice.amount_paid).plus(new Decimal(paymentAmountInSmallestUnit));
       const newAmountDue = new Decimal(currentInvoice.total).minus(newTotalPaid);
 
-      let newStatus: Tables<'invoices'>['status'] = 'sent'; // Default to sent
+      let newStatus: Tables<'invoices'>['status'];
 
       if (newAmountDue.lessThanOrEqualTo(0)) {
         newStatus = 'paid';
       } else if (new Date(currentInvoice.due_date) < new Date()) {
         newStatus = 'overdue';
       } else {
-        newStatus = 'sent'; // Or whatever the current status was if not paid/overdue
+        // If not fully paid and not overdue, retain current status unless it was 'draft'
+        // If it was 'draft' and a payment is made, it should become 'sent'
+        newStatus = currentInvoice.status === 'draft' ? 'sent' : currentInvoice.status;
       }
 
       const { data: updatedInvoice, error: invoiceUpdateError } = await supabase

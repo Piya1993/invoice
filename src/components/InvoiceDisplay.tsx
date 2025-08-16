@@ -4,7 +4,6 @@ import React, { forwardRef } from 'react';
 import { Tables } from '@/types/supabase';
 import { formatCurrency, fromSmallestUnit } from '@/lib/utils';
 import { format } from 'date-fns';
-import { useAuth } from '@/context/AuthContext'; // To get user email for company info
 import Decimal from 'decimal.js'; // Import Decimal
 
 // Extend Invoice type to include related client and invoice_items
@@ -21,7 +20,7 @@ interface InvoiceDisplayProps {
 
 const InvoiceDisplay = forwardRef<HTMLDivElement, InvoiceDisplayProps>(
   ({ invoice, company, settings }, ref) => {
-    const { user } = useAuth(); // Get user from auth context
+    // Removed useAuth as user email is not needed here.
 
     return (
       <div ref={ref} className="p-8 bg-white text-black" style={{ width: '210mm', minHeight: '297mm', margin: '0 auto', boxSizing: 'border-box' }}>
@@ -39,7 +38,7 @@ const InvoiceDisplay = forwardRef<HTMLDivElement, InvoiceDisplayProps>(
             <h2 className="text-xl font-semibold">{company.name}</h2>
             <p className="text-sm">{company.address || ''}</p>
             <p className="text-sm">{company.phone || ''}</p>
-            <p className="text-sm">{company.email || ''}</p> {/* Display company email */}
+            <p className="text-sm">{company.email || ''}</p> {/* Display company email from company prop */}
           </div>
         </div>
 

@@ -18,6 +18,7 @@ interface SettingsFormProps {
   onSave: (company: Tables<'companies'>, settings: Tables<'settings'>) => void;
   initialCompanyData?: Tables<'companies'> | null;
   initialSettingsData?: Tables<'settings'> | null;
+  isInitialSetup?: boolean; // New prop
 }
 
 const SettingsForm: React.FC<SettingsFormProps> = ({
@@ -26,6 +27,7 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
   onSave,
   initialCompanyData,
   initialSettingsData,
+  isInitialSetup = false, // Default to false
 }) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -66,6 +68,10 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
     e.preventDefault();
     if (!user?.id) {
       toast.error('User not authenticated.');
+      return;
+    }
+    if (isInitialSetup && !companyName.trim()) {
+      toast.error('Company Name is required for initial setup.');
       return;
     }
 
@@ -140,7 +146,9 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
 
       onSave(updatedCompany, savedSettings);
       toast.success('Settings updated successfully!');
-      onClose();
+      if (!isInitialSetup) { // Only close if not initial setup page
+        onClose();
+      }
     } catch (error: any) {
       console.error('Error saving settings:', error);
       toast.error(error.message || 'Failed to save settings.');
@@ -153,7 +161,7 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Company & Application Settings</DialogTitle>
+          <DialogTitle>{isInitialSetup ? 'Complete Your Company Setup' : 'Company & Application Settings'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-6 py-4">
           <h3 className="text-lg font-semibold">Company Information</h3>

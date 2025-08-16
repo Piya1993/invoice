@@ -3,18 +3,21 @@
 import React from 'react';
 import AuthForm from '@/components/AuthForm';
 import { useAuth } from '@/context/AuthContext';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom'; // Corrected import
 import { useEffect } from 'react';
 
 const AuthPage: React.FC = () => {
   const { user, loading } = useAuth();
-  const router = useRouter();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (user && !loading) {
-      router.push('/dashboard');
+      // AuthContext no longer redirects to dashboard directly.
+      // Layout will handle the initial setup check and redirection.
+      // For AuthPage, if user is logged in, we can still push to dashboard as a default.
+      navigate('/dashboard');
     }
-  }, [user, loading, router]);
+  }, [user, loading, navigate]);
 
   if (loading) {
     return (

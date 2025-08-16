@@ -1,16 +1,57 @@
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import useCompany from '@/hooks/useCompany';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { toast } from 'react-hot-toast';
-import { User, Building } from 'lucide-react';
+import { User, Building, KeyRound } from 'lucide-react'; // Added KeyRound icon
+import { supabase } from '@/lib/supabase/client'; // Import supabase client
 
 const ProfilePage: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
   const { company, loading: companyLoading } = useCompany();
+
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordUpdateLoading, setPasswordUpdateLoading] = useState(false);
+
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordUpdateLoading(true);
+
+    if (newPassword !== confirmNewPassword) {
+      toast.error('New passwords do not match.');
+      setPasswordUpdateLoading(false);
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters long.');
+      setPasswordUpdateLoading(false);
+      return;
+    }
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (error) throw error;
+
+      toast.success('Password updated successfully!');
+      setNewPassword('');
+      setConfirmNewPassword('');
+    } catch (error: any) {
+      console.error('Error updating password:', error);
+      toast.error(error.message || 'Failed to update password.');
+    } finally {
+      setPasswordUpdateLoading(false);
+    }
+  };
 
   if (authLoading || companyLoading) {
     return (
@@ -31,7 +72,8 @@ const ProfilePage: React.FC = () => {
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-3xl font-bold mb-6">User Profile</h1>
-      <Card className="max-w-lg mx-auto">
+      
+      <Card className="max-w-lg mx-auto mb-6">
         <CardHeader>
           <CardTitle className="flex items-center">
             <User className="mr-2 h-5 w-5" /> Your Account Information
@@ -49,9 +91,44 @@ const ProfilePage: React.FC = () => {
           <p className="text-muted-foreground text-sm">
             For company-wide settings, please visit the <a href="/settings" className="text-primary hover:underline">Settings page</a>.
           </p>
-          <Button variant="outline" onClick={() => toast.info('Feature coming soon!')}>
-            Update Password (Coming Soon)
-          </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="max-w-lg mx-auto">
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <KeyRound className="mr-2 h-5 w-5" /> Change Password
+          </CardTitle>
+          <CardDescription>Update your account password.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handlePasswordUpdate} className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="newPassword">New Password</Label>
+              <Input
+                id="newPassword"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+                disabled={passwordUpdateLoading}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="confirmNewPassword">Confirm New Password</Label>
+              <Input
+                id="confirmNewPassword"
+                type="password"
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
+                required
+                disabled={passwordUpdateLoading}
+              />
+            </div>
+            <Button type="submit" disabled={passwordUpdateLoading}>
+              {passwordUpdateLoading ? 'Updating...' : 'Update Password'}
+            </Button>
+          </form>
         </CardContent>
       </Card>
     </div>

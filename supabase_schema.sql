@@ -12,7 +12,7 @@ CREATE TABLE companies (
     logo_url text,
     address text,
     phone text,
-    email text, -- New email column
+    email text,
     tax_id text,
     currency text NOT NULL DEFAULT 'PKR',
     created_by uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -21,9 +21,7 @@ CREATE TABLE companies (
 
 CREATE TABLE settings (
     company_id uuid PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,
-    logo_url text, -- Redundant, will be removed from here later
     default_tax_rate numeric NOT NULL DEFAULT 0,
-    default_currency text NOT NULL DEFAULT 'PKR', -- Redundant, will be removed from here later
     numbering_prefix text NOT NULL DEFAULT 'INV-',
     next_number integer NOT NULL DEFAULT 1,
     locale text NOT NULL DEFAULT 'en-PK',

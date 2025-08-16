@@ -19,7 +19,7 @@ export interface Database {
           logo_url: string | null
           address: string | null
           phone: string | null
-          email: string | null // Added email field
+          email: string | null
           tax_id: string | null
           currency: string
           created_by: string
@@ -31,7 +31,7 @@ export interface Database {
           logo_url?: string | null
           address?: string | null
           phone?: string | null
-          email?: string | null // Added email field
+          email?: string | null
           tax_id?: string | null
           currency?: string
           created_by: string
@@ -43,7 +43,7 @@ export interface Database {
           logo_url?: string | null
           address?: string | null
           phone?: string | null
-          email?: string | null // Added email field
+          email?: string | null
           tax_id?: string | null
           currency?: string
           created_by?: string
@@ -305,9 +305,7 @@ export interface Database {
       settings: {
         Row: {
           company_id: string
-          logo_url: string | null
           default_tax_rate: number
-          default_currency: string
           numbering_prefix: string
           next_number: number
           locale: string
@@ -317,9 +315,7 @@ export interface Database {
         }
         Insert: {
           company_id: string
-          logo_url?: string | null
           default_tax_rate?: number
-          default_currency?: string
           numbering_prefix?: string
           next_number?: number
           locale?: string
@@ -329,9 +325,7 @@ export interface Database {
         }
         Update: {
           company_id?: string
-          logo_url?: string | null
           default_tax_rate?: number
-          default_currency?: string
           numbering_prefix?: string
           next_number?: number
           locale?: string

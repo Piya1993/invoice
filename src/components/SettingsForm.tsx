@@ -37,7 +37,7 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
   const [companyLogoUrl, setCompanyLogoUrl] = useState(initialCompanyData?.logo_url || '');
   const [companyAddress, setCompanyAddress] = useState(initialCompanyData?.address || '');
   const [companyPhone, setCompanyPhone] = useState(initialCompanyData?.phone || '');
-  const [companyEmail, setCompanyEmail] = useState(initialCompanyData?.email || ''); // New state for company email
+  const [companyEmail, setCompanyEmail] = useState(initialCompanyData?.email || '');
   const [companyTaxId, setCompanyTaxId] = useState(initialCompanyData?.tax_id || '');
   const [companyCurrency, setCompanyCurrency] = useState(initialCompanyData?.currency || 'PKR');
 
@@ -54,7 +54,7 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
       setCompanyLogoUrl(initialCompanyData?.logo_url || '');
       setCompanyAddress(initialCompanyData?.address || '');
       setCompanyPhone(initialCompanyData?.phone || '');
-      setCompanyEmail(initialCompanyData?.email || ''); // Set initial company email
+      setCompanyEmail(initialCompanyData?.email || '');
       setCompanyTaxId(initialCompanyData?.tax_id || '');
       setCompanyCurrency(initialCompanyData?.currency || 'PKR');
 
@@ -89,7 +89,7 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
           logo_url: companyLogoUrl || null,
           address: companyAddress || null,
           phone: companyPhone || null,
-          email: companyEmail || null, // Include company email in update
+          email: companyEmail || null,
           tax_id: companyTaxId || null,
           currency: companyCurrency,
         };
@@ -109,7 +109,7 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
           logo_url: companyLogoUrl || null,
           address: companyAddress || null,
           phone: companyPhone || null,
-          email: companyEmail || null, // Include company email in insert
+          email: companyEmail || null,
           tax_id: companyTaxId || null,
           currency: companyCurrency,
           created_by: user.id,
@@ -127,9 +127,7 @@ const SettingsForm: React.FC<SettingsFormProps> = ({
       // Prepare settings upsert data
       const settingsUpsert: TablesInsert<'settings'> = {
         company_id: currentCompanyId,
-        logo_url: companyLogoUrl || null, // Keep for now, will be removed later if redundant
         default_tax_rate: parseFloat(defaultTaxRate),
-        default_currency: companyCurrency, // Keep for now, will be removed later if redundant
         numbering_prefix: numberingPrefix,
         next_number: parseInt(nextNumber),
         locale: locale,

@@ -15,6 +15,7 @@ import InvoiceDetailsPage from '@/pages/InvoiceDetailsPage';
 import CompanySetupPage from '@/pages/CompanySetupPage';
 import ProfilePage from '@/pages/ProfilePage';
 import ResetPasswordPage from '@/pages/ResetPasswordPage';
+import UpdatePasswordPage from '@/pages/UpdatePasswordPage'; // Import the new page
 import Layout from '@/components/Layout';
 import { Toaster } from 'react-hot-toast';
 
@@ -27,6 +28,7 @@ function App() {
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/update-password" element={<UpdatePasswordPage />} /> {/* New route for password updates */}
           {/* Protected routes using the Layout component */}
           <Route element={<Layout />}>
             <Route path="/dashboard" element={<Dashboard />} />

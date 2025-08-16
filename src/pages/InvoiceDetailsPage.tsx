@@ -14,7 +14,8 @@ import { formatCurrency, fromSmallestUnit } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ArrowLeft, Edit, Printer, DollarSign } from 'lucide-react';
 import PaymentForm from '@/components/PaymentForm';
-import InvoiceForm from '@/components/InvoiceForm'; // Import InvoiceForm
+import InvoiceForm from '@/components/InvoiceForm';
+import InvoicePdfGenerator from '@/components/InvoicePdfGenerator'; // Import the new component
 
 // Extend Invoice type to include related client and invoice_items
 type InvoiceWithDetails = Tables<'invoices'> & {
@@ -30,7 +31,7 @@ const InvoiceDetailsPage: React.FC = () => {
   const [invoice, setInvoice] = useState<InvoiceWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false);
-  const [isEditFormOpen, setIsEditFormOpen] = useState(false); // State for edit form
+  const [isEditFormOpen, setIsEditFormOpen] = useState(false);
 
   const fetchInvoiceDetails = useCallback(async () => {
     if (!user?.id || !id) return;
@@ -114,9 +115,8 @@ const InvoiceDetailsPage: React.FC = () => {
         </Button>
         <h1 className="text-3xl font-bold">Invoice #{invoice.number || invoice.id.substring(0, 8)}</h1>
         <div className="space-x-2">
-          <Button variant="outline" onClick={() => toast.info('Print functionality coming soon!')}>
-            <Printer className="mr-2 h-4 w-4" /> Print
-          </Button>
+          {/* Use InvoicePdfGenerator component here */}
+          <InvoicePdfGenerator invoice={invoice} />
           <Button onClick={handleEditInvoice}>
             <Edit className="mr-2 h-4 w-4" /> Edit Invoice
           </Button>

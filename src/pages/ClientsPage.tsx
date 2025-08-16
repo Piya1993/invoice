@@ -23,6 +23,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import useDebounce from '@/hooks/useDebounce'; // Import the new hook
 
 const ClientsPage: React.FC = () => {
   const { user } = useAuth();
@@ -32,8 +33,9 @@ const ClientsPage: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Tables<'clients'> | null>(null);
 
-  // State for search term
+  // State for search term and debounced search term
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebounce(searchTerm, 500); // Debounce for 500ms
 
   // State for pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -56,9 +58,9 @@ const ClientsPage: React.FC = () => {
         .select('*', { count: 'exact' })
         .eq('company_id', company.id);
 
-      // Apply search term
-      if (searchTerm) {
-        query = query.or(`name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`);
+      // Apply debounced search term
+      if (debouncedSearchTerm) {
+        query = query.or(`name.ilike.%${debouncedSearchTerm}%,email.ilike.%${debouncedSearchTerm}%,phone.ilike.%${debouncedSearchTerm}%`);
       }
 
       query = query.order('name', { ascending: true })
@@ -75,16 +77,21 @@ const ClientsPage: React.FC = () => {
     } finally {
       setLoadingClients(false);
     }
-  }, [company, searchTerm, currentPage, itemsPerPage]);
+  }, [company, debouncedSearchTerm, currentPage, itemsPerPage]); // Depend on debouncedSearchTerm
 
   useEffect(() => {
     if (!companyLoading && company) {
-      fetchClients();
+      // Reset page to 1 when search term changes
+      if (currentPage !== 1 && debouncedSearchTerm !== searchTerm) {
+        setCurrentPage(1);
+      } else {
+        fetchClients();
+      }
     } else if (!companyLoading && companyError) {
       toast.error(companyError);
       setLoadingClients(false);
     }
-  }, [company, companyLoading, companyError, fetchClients]);
+  }, [company, companyLoading, companyError, fetchClients, debouncedSearchTerm, searchTerm, currentPage]); // Add debouncedSearchTerm to dependencies
 
   const handleSaveClient = (newClient: Tables<'clients'>) => {
     fetchClients();
@@ -162,7 +169,7 @@ const ClientsPage: React.FC = () => {
             <Input
               placeholder="Search by name, email, or phone..."
               value={searchTerm}
-              onChange={(e) => setCurrentPage(1) || setSearchTerm(e.target.value)}
+              onChange={(e) => setSearchTerm(e.target.value)} // Update searchTerm directly
               className="pl-9"
             />
           </div>
@@ -174,7 +181,7 @@ const ClientsPage: React.FC = () => {
           <CardTitle>Your Clients</CardTitle>
         </CardHeader>
         <CardContent>
-          {clients.length === 0 ? (
+          {clients.length === 0 && !loadingClients ? ( // Check loadingClients to avoid "No clients found" during search
             <p className="text-muted-foreground text-center py-8">No clients found. Add your first client!</p>
           ) : (
             <>

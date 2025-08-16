@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PlusCircle, Edit, Trash2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
-import { supabase } from '@/lib/supabase/client';
+import { supabase } => '@/lib/supabase/client';
 import { Tables } from '@/types/supabase';
 import { toast } from 'react-hot-toast';
 import ProductForm from '@/components/ProductForm';
@@ -24,6 +24,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import useDebounce from '@/hooks/useDebounce'; // Import the new hook
 
 const ProductsPage: React.FC = () => {
   const { user } = useAuth();
@@ -33,8 +34,9 @@ const ProductsPage: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Tables<'products'> | null>(null);
 
-  // State for search term
+  // State for search term and debounced search term
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebounce(searchTerm, 500); // Debounce for 500ms
 
   // State for pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -57,9 +59,9 @@ const ProductsPage: React.FC = () => {
         .select('*', { count: 'exact' })
         .eq('company_id', company.id);
 
-      // Apply search term
-      if (searchTerm) {
-        query = query.or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
+      // Apply debounced search term
+      if (debouncedSearchTerm) {
+        query = query.or(`name.ilike.%${debouncedSearchTerm}%,description.ilike.%${debouncedSearchTerm}%`);
       }
 
       query = query.order('name', { ascending: true })
@@ -76,16 +78,21 @@ const ProductsPage: React.FC = () => {
     } finally {
       setLoadingProducts(false);
     }
-  }, [company, searchTerm, currentPage, itemsPerPage]);
+  }, [company, debouncedSearchTerm, currentPage, itemsPerPage]); // Depend on debouncedSearchTerm
 
   useEffect(() => {
     if (!companyLoading && company) {
-      fetchProducts();
+      // Reset page to 1 when search term changes
+      if (currentPage !== 1 && debouncedSearchTerm !== searchTerm) {
+        setCurrentPage(1);
+      } else {
+        fetchProducts();
+      }
     } else if (!companyLoading && companyError) {
       toast.error(companyError);
       setLoadingProducts(false);
     }
-  }, [company, companyLoading, companyError, fetchProducts]);
+  }, [company, companyLoading, companyError, fetchProducts, debouncedSearchTerm, searchTerm, currentPage]); // Add debouncedSearchTerm to dependencies
 
   const handleSaveProduct = (newProduct: Tables<'products'>) => {
     fetchProducts();
@@ -163,7 +170,7 @@ const ProductsPage: React.FC = () => {
             <Input
               placeholder="Search by name or description..."
               value={searchTerm}
-              onChange={(e) => setCurrentPage(1) || setSearchTerm(e.target.value)}
+              onChange={(e) => setSearchTerm(e.target.value)} // Update searchTerm directly
               className="pl-9"
             />
           </div>
@@ -175,7 +182,7 @@ const ProductsPage: React.FC = () => {
           <CardTitle>Your Products</CardTitle>
         </CardHeader>
         <CardContent>
-          {products.length === 0 ? (
+          {products.length === 0 && !loadingProducts ? ( // Check loadingProducts to avoid "No products found" during search
             <p className="text-muted-foreground text-center py-8">No products found. Add your first product!</p>
           ) : (
             <>

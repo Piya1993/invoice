@@ -27,6 +27,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import useDebounce from '@/hooks/useDebounce'; // Import the new hook
 
 // Extend Invoice type to include related client and invoice_items
 type InvoiceWithDetails = Tables<'invoices'> & {
@@ -43,8 +44,11 @@ const InvoicesPage: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<InvoiceWithDetails | null>(null);
 
-  // State for search and filter
+  // State for search term and debounced search term
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebounce(searchTerm, 500); // Debounce for 500ms
+
+  // State for filter
   const [filterStatus, setFilterStatus] = useState<Enums<'invoice_status'> | 'all'>('all');
 
   // State for pagination
@@ -70,9 +74,9 @@ const InvoicesPage: React.FC = () => {
         .select('*, clients(*), invoice_items(*)', { count: 'exact' })
         .eq('company_id', company.id);
 
-      // Apply search term
-      if (searchTerm) {
-        query = query.or(`number.ilike.%${searchTerm}%,clients.name.ilike.%${searchTerm}%`);
+      // Apply debounced search term
+      if (debouncedSearchTerm) {
+        query = query.or(`number.ilike.%${debouncedSearchTerm}%,clients.name.ilike.%${debouncedSearchTerm}%`);
       }
 
       // Apply status filter
@@ -94,18 +98,23 @@ const InvoicesPage: React.FC = () => {
     } finally {
       setLoadingInvoices(false);
     }
-  }, [company, searchTerm, filterStatus, currentPage, itemsPerPage]);
+  }, [company, debouncedSearchTerm, filterStatus, currentPage, itemsPerPage]); // Depend on debouncedSearchTerm
 
   useEffect(() => {
     if (!authLoading && !user) {
       navigate('/auth');
     } else if (!companyLoading && company) {
-      fetchInvoices();
+      // Reset page to 1 when search term or filter status changes
+      if (currentPage !== 1 && (debouncedSearchTerm !== searchTerm || filterStatus !== 'all')) {
+        setCurrentPage(1);
+      } else {
+        fetchInvoices();
+      }
     } else if (!companyLoading && companyError) {
       toast.error(companyError);
       setLoadingInvoices(false);
     }
-  }, [user, authLoading, company, companyLoading, companyError, navigate, fetchInvoices]);
+  }, [user, authLoading, company, companyLoading, companyError, navigate, fetchInvoices, debouncedSearchTerm, searchTerm, filterStatus, currentPage]); // Add debouncedSearchTerm to dependencies
 
   const handleSaveInvoice = (newInvoice: InvoiceWithDetails) => {
     fetchInvoices();
@@ -188,11 +197,11 @@ const InvoicesPage: React.FC = () => {
               <Input
                 placeholder="Search by invoice number or client name..."
                 value={searchTerm}
-                onChange={(e) => setCurrentPage(1) || setSearchTerm(e.target.value)}
+                onChange={(e) => setSearchTerm(e.target.value)} // Update searchTerm directly
                 className="pl-9"
               />
             </div>
-            <Select value={filterStatus} onValueChange={(value) => setCurrentPage(1) || setFilterStatus(value as Enums<'invoice_status'> | 'all')}>
+            <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as Enums<'invoice_status'> | 'all')}> // Update filterStatus directly
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
@@ -213,7 +222,7 @@ const InvoicesPage: React.FC = () => {
           <CardTitle>Your Invoices</CardTitle>
         </CardHeader>
         <CardContent>
-          {invoices.length === 0 ? (
+          {invoices.length === 0 && !loadingInvoices ? ( // Check loadingInvoices to avoid "No invoices found" during search
             <p className="text-muted-foreground text-center py-8">No invoices found. Create your first invoice!</p>
           ) : (
             <>

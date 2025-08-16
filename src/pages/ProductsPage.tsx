@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, Edit, Trash2, Search } from 'lucide-react'; // Import Search icon
+import { PlusCircle, Edit, Trash2, Search, ChevronLeft, ChevronRight } from 'lucide-react'; // Import pagination icons
 import { supabase } from '@/lib/supabase/client';
 import { Tables } from '@/types/supabase';
 import { toast } from 'react-hot-toast';
@@ -25,6 +25,11 @@ const ProductsPage: React.FC = () => {
   // State for search term
   const [searchTerm, setSearchTerm] = useState('');
 
+  // State for pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10); // You can make this configurable
+  const [totalCount, setTotalCount] = useState(0);
+
   const fetchProducts = useCallback(async () => {
     if (!company?.id) {
       setLoadingProducts(false);
@@ -33,9 +38,12 @@ const ProductsPage: React.FC = () => {
 
     setLoadingProducts(true);
     try {
+      const from = (currentPage - 1) * itemsPerPage;
+      const to = from + itemsPerPage - 1;
+
       let query = supabase
         .from('products')
-        .select('*')
+        .select('*', { count: 'exact' }) // Request exact count
         .eq('company_id', company.id);
 
       // Apply search term
@@ -43,19 +51,21 @@ const ProductsPage: React.FC = () => {
         query = query.or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
       }
 
-      query = query.order('name', { ascending: true });
+      query = query.order('name', { ascending: true })
+                   .range(from, to); // Apply pagination range
 
-      const { data, error } = await query;
+      const { data, error, count } = await query;
 
       if (error) throw error;
       setProducts(data || []);
+      setTotalCount(count || 0); // Set the total count
     } catch (error: any) {
       console.error('Error fetching products:', error);
       toast.error(error.message || 'Failed to fetch products.');
     } finally {
       setLoadingProducts(false);
     }
-  }, [company, searchTerm]); // Add searchTerm to dependencies
+  }, [company, searchTerm, currentPage, itemsPerPage]); // Add pagination dependencies
 
   useEffect(() => {
     if (!companyLoading && company) {
@@ -67,11 +77,8 @@ const ProductsPage: React.FC = () => {
   }, [company, companyLoading, companyError, fetchProducts]);
 
   const handleSaveProduct = (newProduct: Tables<'products'>) => {
-    if (editingProduct) {
-      setProducts(products.map((product) => (product.id === newProduct.id ? newProduct : product)));
-    } else {
-      setProducts([...products, newProduct]);
-    }
+    // After saving, re-fetch to ensure pagination and filters are correctly applied
+    fetchProducts();
     setEditingProduct(null);
     setIsFormOpen(false);
   };
@@ -84,9 +91,8 @@ const ProductsPage: React.FC = () => {
   const handleDeleteProduct = async (productId: string) => {
     if (!window.confirm('Are you sure you want to delete this product?')) return;
 
-    const originalProducts = [...products];
-    setProducts(products.filter((product) => product.id !== productId)); // Optimistic UI
-
+    // Optimistic UI update is tricky with pagination, so we'll just re-fetch
+    setLoadingProducts(true); // Show loading while deleting
     try {
       const { error } = await supabase
         .from('products')
@@ -95,11 +101,22 @@ const ProductsPage: React.FC = () => {
 
       if (error) throw error;
       toast.success('Product deleted successfully!');
+      fetchProducts(); // Re-fetch after deletion
     } catch (error: any) {
       console.error('Error deleting product:', error);
       toast.error(error.message || 'Failed to delete product.');
-      setProducts(originalProducts); // Revert on error
+      setLoadingProducts(false); // Hide loading on error
     }
+  };
+
+  const totalPages = Math.ceil(totalCount / itemsPerPage);
+
+  const handlePreviousPage = () => {
+    setCurrentPage(prev => Math.max(1, prev - 1));
+  };
+
+  const handleNextPage = () => {
+    setCurrentPage(prev => Math.min(totalPages, prev + 1));
   };
 
   if (companyLoading || loadingProducts) {
@@ -139,7 +156,7 @@ const ProductsPage: React.FC = () => {
             <Input
               placeholder="Search by name or description..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => setCurrentPage(1) || setSearchTerm(e.target.value)} // Reset page on search
               className="pl-9"
             />
           </div>
@@ -154,35 +171,58 @@ const ProductsPage: React.FC = () => {
           {products.length === 0 ? (
             <p className="text-muted-foreground text-center py-8">No products found. Add your first product!</p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Unit</TableHead>
-                  <TableHead>Default Price</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {products.map((product) => (
-                  <TableRow key={product.id}>
-                    <TableCell className="font-medium">{product.name}</TableCell>
-                    <TableCell>{product.description}</TableCell>
-                    <TableCell>{product.unit}</TableCell>
-                    <TableCell>{formatCurrency(product.default_price)}</TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" onClick={() => handleEditProduct(product)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDeleteProduct(product.id)}>
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </Button>
-                    </TableCell>
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Unit</TableHead>
+                    <TableHead>Default Price</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {products.map((product) => (
+                    <TableRow key={product.id}>
+                      <TableCell className="font-medium">{product.name}</TableCell>
+                      <TableCell>{product.description}</TableCell>
+                      <TableCell>{product.unit}</TableCell>
+                      <TableCell>{formatCurrency(product.default_price)}</TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="sm" onClick={() => handleEditProduct(product)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleDeleteProduct(product.id)}>
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {totalPages > 1 && (
+                <div className="flex justify-between items-center mt-4">
+                  <Button
+                    variant="outline"
+                    onClick={handlePreviousPage}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-2" /> Previous
+                  </Button>
+                  <span className="text-sm text-muted-foreground">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    onClick={handleNextPage}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next <ChevronRight className="h-4 w-4 ml-2" />
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
